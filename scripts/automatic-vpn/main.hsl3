@@ -1,0 +1,83 @@
+f=Import('functions.hsl3')
+#filepath="/example/input/"
+
+mmlScripts=""
+userSelect=""
+csv_path=""
+ikePrint=""
+oss_area = f.Check_OSS()
+
+while (userSelect!="Exit")
+    csv_path,userSelect,rbSelect, filepath=f.Entry_form(csv_path)
+
+    if userSelect == "Confirm"
+        if len(csv_path) == 0
+            Print("\nERROR: No input file selected!\n")
+        else
+            SiteList=f.Csv_to_array(csv_path)
+            #SiteList=['SITE_EXAMPLE']
+            startTime=StrfTime("%a, %d %b %Y %H:%M:%S", GMTime())
+            Print("Start time: "+startTime)
+            Print("Number of Sites: "+str(len(SiteList))+'\n')
+            
+            site_count=0
+
+            for site in SiteList
+                site_count=site_count+1
+                state=ConnectNE(site)
+                            
+                if state==1 and rbSelect == 0
+                    if site_count == 1
+                        Print('NE Name\tIKE Name\tRemote IP')
+                    end       
+                    #Print(str(site_count)+" - Connected to: "+site)
+                    ikeList=f.getIKE(rbSelect, site)
+                    for ikeName in ikeList
+                        mmlScripts=mmlScripts+"MOD IKEPEER:PEERNAME=\""+ikeName+"\",IKEVERSION=IKE_V2,IPVERSION=IPV4,IDTYPE=DN,REMOTENAME=\"OPERATOR_DN\"; {"+site+"}\n"
+                    end
+                    
+                elif state==1 and rbSelect == 1
+                    #Print(rbSelect)
+                    #Print(str(site_count)+" - Connected to: "+site)
+                    if site_count == 1
+                        Print('NE Name\tIKE Name\tRemote IP')
+                    end  
+                    f.getIKE(rbSelect, site)
+
+
+                elif state==1 and rbSelect == 2
+                    ikeList=f.getIKE(rbSelect, site)
+                    for ike in ikeList
+                        ikeState=f.getIKEStatus(ike)
+                        ikePrint=ikePrint+site+'\t'+ike+'\t'+ikeState+'\n'
+                   end
+
+                    if site_count == 1
+                        Print('NE Name\tCell Name\tCell ID\tCell State\tLatest Setup Time')
+                    end         
+                    f.getCellStatus(site)
+   
+                else
+                    Print(str(site_count)+" - "+site+" is Disconnected!")
+                end
+            end
+
+            if rbSelect == 0
+                Print('\n######### MML SCRIPTS #########\n')
+                Print(mmlScripts)
+                Print('###############################\n')
+            end
+
+            if rbSelect == 2
+                Print('\n\n')
+                Print('NE Name\tIKE Name\tIKE State')
+                Print(ikePrint)
+            end
+            endTime=StrfTime("%a, %d %b %Y %H:%M:%S", GMTime())
+            Print("\nEnd time: "+endTime)
+            mmlScripts=""            
+        end
+    end
+end
+
+Print('Hasta compañero!! (ºº,)')

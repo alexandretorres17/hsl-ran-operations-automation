@@ -1,0 +1,2503 @@
+#encoding=utf-8
+
+################Version 2##
+# Creates and Attaches File with Output (2014-08-26)
+# Log is sent with the email (2014-08-26)
+# Single output Line (2014-08-26)
+# Alarm Log (2014-08-26)
+
+################ Version 3
+
+# Added SRAN9 compatibility
+# DSP CELL
+# DSP S1INTERFACE
+# STR VSWRTEST
+# DSP BRD
+# STR RFTEST
+
+################
+
+####################################--Parameter Setting-begin--####################################
+#Global Variables
+mail=("portfolio@example.invalid")
+# mail=("portfolio@example.invalid")
+
+whitelist_alarm_info = ["Conflict Type=Confusion", "HIGH TEMP","X2 Interface Fault","X2 Interface Reset","Service Type=X2-AP","Backup Power Saving","Battery Current Out of Range","Extend Alarm","NE Software Download Ended","NE Software Download Started","Delta Urgent Alarm","NE Software Activation Ended","NE Software Activation Started","INTRUDER I R","INTRUDER DOOR","MAINS FAIL","Delta Non Urgent Alarm","maximum number of X2 interfaces","Mains Input Out of Range","Delta Mains Fail"]
+
+NE_Name = ["LTE_SITE_EXAMPLE"]
+
+
+#Global Variables - Do NOT CHANGE
+dic = {'':''}
+log_dic = {'':''}
+####################################--Parameter Setting-end--####################################
+
+####################################--Function definition-begin--#################################### 
+################ Main function of the program, responsible for basic logic of the program. ################  
+def Main(NEName,Site_name) 
+    loginInfo=CreateLoginInfo('192.0.2.10')
+    # Send MML commands to NEs and parse messages to obtain the required data 
+    Report_Begin_Time = AscTime(LocalTime())
+    Mail_MntMode,Mail_Alarms,Mail_Alarms_Log,Mail_License,Mail_SW,Mail_Cell,Mail_S1Interface,Mail_IPPath,Mail_Neighbour,Mail_VSWR,Mail_Board,Mail_Alarms_After = ExecMMLCmd(NEName,Site_name)
+    
+    
+    Print("Overall Status")
+    Print("Maintenance Mode = " + str(dic['Maintenance Mode']))
+    Print("Active Alarms = " + str(dic['Active Alarms']))
+    Print("Licenses = " + str(dic['Licenses']))
+    Print("Software Version = " + str(dic['Software Version']))
+    Print("Cells Status = " + str(dic['Cells Status']))
+    Print("Cells by Operator (Assuming TEF Cell name contains 'T') = " + str(dic['Cells by Operator']))
+    Print("S1 Interfaces = " + str(dic['S1 Interfaces']))
+    Print("Number VDF MME = " + str(dic['Number VDF MME']))
+    Print("S1-U Interface State = " + str(dic['IP Path']))
+    Print("Neighbours Relations = " + str(dic['Neighbours Relations']))
+    Print("VSWR = " + str(dic['VSWR']))
+    Print("PIM Test = " + str(dic['PIM Test']))
+    Print("Alarms Log = " + str(dic['Alarms Log']))
+    Print("Alarms Log from the Last 10 Days = " + str(dic['Alarms Log_10days']))
+    Print("Active Alarms After Tests = " + str(dic['Active Alarms After Tests']))
+    
+    
+    if NEName != Site_name
+        Overall = "\nOverall Status for site "+NEName+" Co-MPT Site "+str(Site_name)+"\n\n"
+    else
+        Overall = "\nOverall Status for site "+NEName+"\n\n"
+    end
+    Overall += "\tMaintenance Mode = " + str(dic['Maintenance Mode']) + "\n\tActive Alarms = " + str(dic['Active Alarms']) + "\n\tLicenses = " + str(dic['Licenses']) + "\n\tSoftware Version = " + str(dic['Software Version']) + "\n\tCells Status = " + str(dic['Cells Status']) + "\n\tCells by Operator (Assuming TEF Cell name contains 'T') = " + str(dic['Cells by Operator'])+ "\n\tS1 Interfaces =  "+ str(dic['S1 Interfaces']) +  "\n\tNumber VDF MME =  " + str(dic['Number VDF MME']) + "\n\tS1-U Interface State =  "+ str(dic['IP Path'])+ "\n\tNeighbours Relations = " + str(dic['Neighbours Relations']) + "\n\tVSWR = " + str(dic['VSWR'])+ "\n\tPIM Test = " + str(dic['PIM Test']) + "\n\tAlarms Log = " + str(dic['Alarms Log']) + "\n\tAlarms Log from Last 10 Days = " + str(dic['Alarms Log_10days']) + "\n\tActive Alarms After Tests = " + str(dic['Active Alarms After Tests'])
+    Report_End_Time_1 = AscTime(LocalTime())
+    Overall += "\n\n"+str(NEName) +"\t" + str(dic['Maintenance Mode']) + "\t" + str(dic['Active Alarms']) + "\t" + str(dic['Licenses']) + "\t" + str(dic['SW_Version']) + "\t" + str(dic['Cells Status']) + "\t" + str(dic['Cells by Operator']) + "\t" + str(dic['S1 Interfaces']) + "\t" + str(dic['Number VDF MME']) + "\t" + str(dic['IP Path']) + "\t" + str(dic['Neighbours Relations']) + "\t" + str(dic['VSWR']) + "\t" + str(dic['PIM Test']) + "\t" + str(Report_End_Time_1)
+    
+    
+    
+    #--------------
+    Report_End_Time = AscTime(LocalTime())
+    Data_4GHC = "\n***** LTE ACCEPTANCE REPORT ***** \n\nVF Site Ref: "+NEName+"\nExecution Begin Date: "+ Report_Begin_Time+"\n\n"
+    Data_4GHC += (str(Mail_MntMode)+str(Mail_Alarms)+str(Mail_License)+str(Mail_SW)+str(Mail_Cell)+str(Mail_S1Interface)+str(Mail_IPPath)+str(Mail_Neighbour)+str(Mail_VSWR)+str(Mail_Board)+str(Mail_Alarms_After))
+    Data_4GHC += "\n\nExecution End Date: "+ Report_End_Time+"\n"+"\n*****  END OF REPORT  *****"
+    Path = "/export/ossuser/.Acceptance_Logs/4G_"+NEName+".txt"
+	file_open = Open(Path,'w')
+    file_open.write(Data_4GHC)
+    file_open.close()
+    Path_Log = "/export/ossuser/.Acceptance_Logs/4G_"+NEName+"_LOG.txt"
+    Info_Log = str(dic['Log'])
+    Log_Info=str(Info_Log)
+    log_open = Open(Path_Log,'w')
+    log_open.write(Log_Info)
+    log_open.close()
+    
+    All_Path = []
+    All_Path.append(Path)
+    All_Path.append(Path_Log)
+    
+    #Print(Data_4GHC)
+    #Print("Sending Email........")
+    mailInfo = CreateMailInfo()
+    #mailInfo['TO_ADDR']=("portfolio@example.invalid","portfolio@example.invalid","portfolio@example.invalid")
+    mailInfo['TO_ADDR'] = mail
+    #mailInfo['CC_ADDR']=("portfolio@example.invalid")
+    mailInfo['FROM_ADDR']='portfolio@example.invalid'
+    mailInfo['MAIL_SUBJECT']='LTE Health Check '+str(NEName)
+    mailInfo['MAIL_BODY']= str(Overall)
+    mailInfo['MAIL_ATTACH'] = All_Path
+
+    result=SendMail(mailInfo)
+    Print(result)
+    
+    #Removes File
+    
+    #Sleep(10)
+    
+   
+end
+
+# def getData(data,colname)
+    # x=""
+    # y=""
+    # count = None
+    # i= 1
+    # #Put Hedar
+    # count = len(colname)
+    # for x in colname
+            # y += (x) + "|"
+    # end
+    # y += "\n" 
+    # #Put Data
+    # for list in data
+        # count = len(list)
+        # for x in list()
+            # if i <> count
+                # y += (x) + "|"
+                # i += 1
+            # else
+                # y += (x)
+            # end
+        # end
+        # y += "\n"
+        # i = 1
+    # end
+    
+    # return y
+
+# end
+
+
+def getColsByIdx(p, obj=0, attridxs=[],ne=None) 
+
+    cols = [] 
+    
+    #Get specified row of the MML report   
+    row = GetRecordNum(p,obj) 
+    col = GetAttrNum(p, obj) + 1
+    if attridxs==[] 
+        attridxs = range(col) 
+        end 
+    for i in range(row) 
+        onecol = [] 
+        for j in attridxs
+            if j > col 
+                value = "NULL_VALUE" 
+            else 
+                value = GetAttrValueByIdx(p,obj,j,i) 
+            end 
+            onecol.append(value) 
+         end
+         if ne != None
+           onecol.append(ne)
+        end
+       cols.append(onecol) 
+   end
+        return cols 
+ end
+
+################ Check Maintenance Mode ################
+def Check_MmtMode()
+
+    ClearMMLBuffer()
+    Mail_MntMode = "\n    Maintenance Mode Check:\n"
+    @DSP MNTMODE:;
+    mml = GetMMLReport()
+    strMntMode = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strMntMode or GetResultCode(strMntMode) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strMntMode), GetResultCause(strMntMode)) ) 
+        Mail_MntMode += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strMntMode))+"Reason: "+ str(GetResultCause(strMntMode))+"\n"
+        dic.update({'Maintenance Mode':'ERROR'})
+        return Mail_MntMode,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strMntMode) < 1 
+        Print("[ERROR] No proper entry information found")
+        Mail_MntMode += '[ERROR] No proper entry information found\n'
+        dic.update({'Maintenance Mode':'ERROR'})
+        return Mail_MntMode,Info_log
+    end
+    
+    # Check Status
+    Num_MntMode = GetRecordNum(strMntMode,0)
+    valueMntMode = GetAttrValueByIdx(strMntMode,0,0,0)
+    OK_Count = 0
+    if valueMntMode != 'NORMAL'
+        Print("NOK ... Current Maintenance Mode is %s" %valueMntMode)
+        Mail_MntMode += "NOK ... Current Maintenance Mode is %s" %valueMntMode
+        OK_Count += 1
+        # @SET MNTMODE:MNTMODE=NORMAL;
+        # Print("Maintenance Mode was Set to Normal")
+        # ClearMMLBuffer()
+        # @DSP MNTMODE:;
+        # mml_2 = GetMMLReport()
+        # Info_Log += mml_2
+        # strMntMode_2 = ParseMMLRpt(mml_2)
+        # valueMntMode_2 = GetAttrValueByIdx(strMntMode_2,0,0,0)
+        # Print("OK ... Current Maintenance Mode is now set to %s" %valueMntMode_2)
+        # Mail_MntMode += ("OK ... Current Maintenance Mode is now set to %s" %valueMntMode_2)+"\n"
+    else
+        Print("OK ... Current Maintenance Mode is set to %s" %valueMntMode)
+        Mail_MntMode += ("OK ... Current Maintenance Mode is set to %s" %valueMntMode)+"\n"
+    end
+    
+    
+    
+    if  OK_Count <= 0
+        dic.update({'Maintenance Mode':'OK'})
+    else
+        dic.update({'Maintenance Mode':'***** NOT OK *****'})
+    end
+    
+    return Mail_MntMode,Info_log
+
+end
+
+################ Check Active Alarms ################
+def Check_Alarms(NEName)
+
+    ClearMMLBuffer()
+    Mail_Alarms = "\n    Active Alarms Check:\n"
+    @LST ALMAF:;
+    mml = GetMMLReport()
+    strAlarm = ParseAlmRpt(mml)
+    Info_log = str(mml)
+	
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strAlarm or GetAlmResultCode(strAlarm) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetAlmMMLCmd(strAlarm), GetAlmResultCause(strAlarm)) ) 
+        Mail_Alarms += "[ERROR] FAILED Command Execution "+str(GetAlmMMLCmd(strAlarm))+"Reason: "+ str(GetAlmResultCause(strAlarm))+"\n"
+        dic.update({'Active Alarms':'ERROR'})
+        return Mail_Alarms,Info_log
+    end
+    
+    OK_Count = 0 
+    if GetAlmRptNum(strAlarm) <= 0
+        Print("OK ... No Active Alarms in %s" %NEName)
+        Mail_Alarms += ("OK ... No Active Alarms in %s" %NEName)+"\n"
+    else   
+        Print("NOK ... ACTIVE ALARMS in %s" %NEName)
+        Mail_Alarms += ("NOK ... ACTIVE ALARMS in %s" %NEName)+"\n"
+		alarms_print, alarm_filter = Print_Alarms(strAlarm)
+        Mail_Alarms += alarms_print
+        OK_Count += 1
+    end
+    
+    if  OK_Count <= 0
+        dic.update({"Active Alarms":"OK"})
+	elif alarm_filter != ""
+		dic.update({"Active Alarms":"***** NOT OK *****"})
+    elif alarm_filter == ""
+        dic.update({"Active Alarms":"NOT OK"})
+    end    
+    
+    return Mail_Alarms,Info_log
+end
+
+################ Print Active Alarms ################
+def Print_Alarms(Alarms_Parse)
+   
+    Alarms_Parse
+    Mail_Alarms_Print="    Site Has the Following Active Alarms:\n"
+	Alarm_filter = ""
+    for p in range(GetAlmRptNum(Alarms_Parse))
+        Print("          "+str(p+1)+". -> "+str(GetAlmRaiseTime(Alarms_Parse,p))+"     "+str(GetAlmFlowNumber(Alarms_Parse,p))+" - "+str(GetAlmName(Alarms_Parse,p))+" - "+str(GetAlmLocationInfo(Alarms_Parse,p)))
+        Mail_Alarms_Print += "          "+ str(p+1)+". -> "+str(GetAlmRaiseTime(Alarms_Parse,p))+"     "+str(GetAlmFlowNumber(Alarms_Parse,p))+" - "+str(GetAlmName(Alarms_Parse,p))+" - "+str(GetAlmLocationInfo(Alarms_Parse,p))+"\n"
+		
+		for whitlist in whitelist_alarm_info
+			if (whitlist in str(GetAlmLocationInfo(Alarms_Parse,p))) or whitlist in (str(GetAlmName(Alarms_Parse,p)))
+				break
+			else
+				continue
+			end
+		else
+			# Print ("teste: " + str(p+1)+". -> "+str(GetAlmRaiseTime(Alarms_Parse,p))+"     "+str(GetAlmFlowNumber(Alarms_Parse,p))+" - "+str(GetAlmName(Alarms_Parse,p))+" - "+str(GetAlmLocationInfo(Alarms_Parse,p))+"\n")
+			Alarm_filter += str(p+1)+". -> "+str(GetAlmRaiseTime(Alarms_Parse,p))+"     "+str(GetAlmFlowNumber(Alarms_Parse,p))+" - "+str(GetAlmName(Alarms_Parse,p))+" - "+str(GetAlmLocationInfo(Alarms_Parse,p))+"\n"
+		end
+	end
+   
+    return Mail_Alarms_Print, Alarm_filter
+end
+
+
+
+
+
+################ Check Alarms Log ################
+def Check_Alarms_Log(NEName)
+
+    ClearMMLBuffer()
+    Mail_Alarms_Log = "\n    Alarms Log Check:\n"
+    @LST ALMLOG:ALMTP=ALL;
+    #@LST ALMLOG:ALMTP=ALL,SD=2014&08&22;
+    mml = GetMMLReport()
+    strAlarm_Log = ParseAlmRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strAlarm_Log or GetAlmResultCode(strAlarm_Log) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetAlmMMLCmd(strAlarm_Log), GetAlmResultCause(strAlarm_Log)) ) 
+        Mail_Alarms_Log += "[ERROR] FAILED Command Execution "+str(GetAlmMMLCmd(strAlarm_Log))+"Reason: "+ str(GetAlmResultCause(strAlarm_Log))+"\n"
+        dic.update({'Alarms Log':'ERROR'})
+        dic.update({"Alarms Log_10days":'ERROR'})
+        return Mail_Alarms_Log,Info_log
+    end
+    
+    
+    if GetAlmRptNum(strAlarm_Log) <= 0
+        Print("OK ... No Alarm Log in %s" %NEName)
+        Mail_Alarms_Log += ("OK ... No Alarm Log in %s" %NEName)+"\n"
+    else   
+        Print("NOK ... Alarm Log in %s" %NEName)
+        Mail_Alarms_Log += ("NOK ... Alarm Log in %s" %NEName)+"\n"
+		print_alarm_log, alarm_log_filter = Print_Alarms_Log(strAlarm_Log)
+        Mail_Alarms_Log += print_alarm_log
+        Mail_Alarms_Log_10days, Info_log_10days = Check_Alarms_Log_10days(NEName)
+        Mail_Alarms_Log += str(Mail_Alarms_Log_10days)
+        Info_log += str(Info_log_10days)
+    end
+  
+    
+    return Mail_Alarms_Log,Info_log
+end
+
+################ Print Alarms Log ################ 
+def Print_Alarms_Log(Alarms_Parse)
+   
+    Alarms_Parse
+    Mail_Alarms_Log_Print="    Site Had the Following Alarms Log:\n"
+    log_dic.clear()
+	Alarm_log_filter = ""
+    for p in range(GetAlmRptNum(Alarms_Parse))
+        Print("          "+str(p+1)+". -> "+str(GetAlmRaiseTime(Alarms_Parse,p))+"     "+str(GetAlmFlowNumber(Alarms_Parse,p))+" - "+str(GetAlmName(Alarms_Parse,p)))
+        Mail_Alarms_Log_Print += "          "+ str(p+1)+". -> "+str(GetAlmRaiseTime(Alarms_Parse,p))+"     "+str(GetAlmFlowNumber(Alarms_Parse,p))+" - "+str(GetAlmName(Alarms_Parse,p))+"\n"
+		
+		for whitlist in whitelist_alarm_info
+			if (whitlist in str(GetAlmLocationInfo(Alarms_Parse,p))) or whitlist in (str(GetAlmName(Alarms_Parse,p)))
+				break
+			else
+				continue
+			end
+		else
+			#Print ("teste: " + str(p+1)+". -> "+str(GetAlmRaiseTime(Alarms_Parse,p))+"     "+str(GetAlmFlowNumber(Alarms_Parse,p))+" - "+str(GetAlmName(Alarms_Parse,p))+" - "+str(GetAlmLocationInfo(Alarms_Parse,p))+"\n")
+			Alarm_log_filter += str(p+1)+". -> "+str(GetAlmRaiseTime(Alarms_Parse,p))+"     "+str(GetAlmFlowNumber(Alarms_Parse,p))+" - "+str(GetAlmName(Alarms_Parse,p))+" - "+str(GetAlmLocationInfo(Alarms_Parse,p))+"\n"
+
+		end
+		
+	end
+   
+    return Mail_Alarms_Log_Print,Alarm_log_filter
+end
+
+################ Check Alarms Log ################
+def Check_Alarms_Log_10days(NEName)
+
+    ClearMMLBuffer()
+    Mail_Alarms_Log_10days = "\n    Alarms Log 10 Days Check:\n"
+    
+    #Get the GMT time.
+    secs = Time()
+    #Output the GMT time.
+    #Add 3600 S, that is, one hour, to secs. Subtract 864000 (10 days) Then, output the result.
+    time_ref = StrfTime("%Y-%m-%d %H:%M:%S", GMTime(secs + 3600-864000))
+    #Print(time_ref)
+    year=time_ref[0:4]
+    month=time_ref[5:7]
+    day=time_ref[8:10]
+    
+    
+    #@LST ALMLOG:ALMTP=ALL,SD=2014&08&22;
+    CMD = ("LST ALMLOG:ALMTP=ALL,SD="+year+"&"+month+"&"+day+";")
+    #Print (CMD)
+    SendMML(CMD)
+
+    mml = GetMMLReport()
+    strAlarm_Log_10days = ParseAlmRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strAlarm_Log_10days or GetAlmResultCode(strAlarm_Log_10days) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetAlmMMLCmd(strAlarm_Log_10days), GetAlmResultCause(strAlarm_Log_10days)) ) 
+        Mail_Alarms_Log_10days += "[ERROR] FAILED Command Execution "+str(GetAlmMMLCmd(strAlarm_Log_10days))+"Reason: "+ str(GetAlmResultCause(strAlarm_Log_10days))+"\n"
+        dic.update({'Alarms Log':'ERROR'})
+        dic.update({"Alarms Log_10days":'ERROR'})
+        return Mail_Alarms_Log_10days,Info_log
+    end
+    
+    OK_Count = 0        
+    if GetAlmRptNum(strAlarm_Log_10days) <= 0
+        Print("OK ... No Alarm Log from Last 10 Days in %s" %NEName)
+        Mail_Alarms_Log_10days+= ("OK ... No Alarm Log from Last 10 Days in %s" %NEName)+"\n"
+    else   
+        Print("NOK ... Alarm Log from Last 10 Days in %s" %NEName)
+        Mail_Alarms_Log_10days += ("NOK ... Alarm Log from Last 10 Days in %s" %NEName)+"\n"
+		log_print, limit_check, log_print_filter = Print_Alarms_Log_10days(strAlarm_Log_10days)
+        Mail_Alarms_Log_10days += log_print
+        OK_Count += 1
+    end
+    #Print(str(log_dic['SCTP Link Congestion']))
+    #Print(str(log_dic.items()))
+	
+    if  OK_Count <= 0
+        dic.update({"Alarms Log":"OK"})
+	elif limit_check == "notok" and log_print_filter != ""
+		dic.update({"Alarms Log":"***** NOT OK *****"}) 
+    else
+        dic.update({"Alarms Log":"NOT OK"}) ## Sem as * quer dizer que tem log mas nenhum alarme com mais de 3x então a macro do excel vai ignorar
+    end    
+    
+    dic.update({"Alarms Log_10days":""+ str(log_dic.items())})
+    return Mail_Alarms_Log_10days,Info_log
+end
+
+################ Print Alarms Log ################
+def Print_Alarms_Log_10days(Alarms_Parse)
+   
+    Alarms_Parse
+    Mail_Alarms_Log_Print_10days="    Site Had the Following Alarms Log in the Last 10 Days:\n"
+    log_dic.clear()
+	Alarm_log_filter = ""
+	limit_error = ""
+    for p in range(GetAlmRptNum(Alarms_Parse))
+        Print("          "+str(p+1)+". -> "+str(GetAlmRaiseTime(Alarms_Parse,p))+"     "+str(GetAlmFlowNumber(Alarms_Parse,p))+" - "+str(GetAlmName(Alarms_Parse,p)))
+        Mail_Alarms_Log_Print_10days += "          "+ str(p+1)+". -> "+str(GetAlmRaiseTime(Alarms_Parse,p))+"     "+str(GetAlmFlowNumber(Alarms_Parse,p))+" - "+str(GetAlmName(Alarms_Parse,p))+"\n"
+	
+		for whitlist in whitelist_alarm_info
+			if (whitlist in str(GetAlmLocationInfo(Alarms_Parse,p))) or whitlist in (str(GetAlmName(Alarms_Parse,p)))
+				break
+			else
+				continue
+			end
+		else
+			if str(GetAlmName(Alarms_Parse,p))not in log_dic
+				log_dic.update({str(GetAlmName(Alarms_Parse,p)):1})
+			else
+				log_dic.update({str(GetAlmName(Alarms_Parse,p)):int(log_dic[str(GetAlmName(Alarms_Parse,p))])+1})
+				if (log_dic[str(GetAlmName(Alarms_Parse,p))] >= 5)
+					limit_error = "notok"
+				end
+			end
+			Alarm_log_filter += str(p+1)+". -> "+str(GetAlmRaiseTime(Alarms_Parse,p))+"     "+str(GetAlmFlowNumber(Alarms_Parse,p))+" - "+str(GetAlmName(Alarms_Parse,p))+" - "+str(GetAlmLocationInfo(Alarms_Parse,p))+"\n"
+		end
+    end
+   
+    return Mail_Alarms_Log_Print_10days, limit_error, Alarm_log_filter
+end
+
+
+
+
+################ Check Licenses ################
+def Check_Licenses()
+
+    ClearMMLBuffer()
+    Mail_License = "\n    Running License Check:\n"
+    @LST LICENSE:;
+    mml = GetMMLReport()
+    strLicense = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strLicense or GetResultCode(strLicense) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strLicense), GetResultCause(strLicense)))
+        Mail_License += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strLicense))+"Reason: "+ str(GetResultCause(strLicense))+"\n"
+        dic.update({"Licenses":"ERROR"})
+        return Mail_License,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strLicense) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_License += '[ERROR] No proper entry information found\n'
+        dic.update({"Licenses":"ERROR"})
+        return Mail_License,Info_log
+    end
+    
+    # Check Status
+    Num_License = GetRecordNum(strLicense,0)
+    OK_Count = 0
+    for i in range (Num_License)
+        value = GetAttrValueByIdx(strLicense,0,2,i)
+        # Lic_Flag=GetAttrValueByName(strLicense,0,"IsCurrentLicense",%i))
+        if value == 'Yes'
+            value_2 = GetAttrValueByIdx(strLicense,0,1,i)
+            if "lic" in value_2
+                Print("OK ... Active License is "+ str(GetAttrValueByName(strLicense,0,"LicenseFileName",i)))
+                Mail_License += "OK ... Active License is "+ str(GetAttrValueByName(strLicense,0,"LicenseFileName",i))+"\n"
+            else
+                Print("NOK ... Active License is "+ str(GetAttrValueByName(strLicense,0,"LicenseFileName",i)))
+                Mail_License += "NOK ... Active License is "+ str(GetAttrValueByName(strLicense,0,"LicenseFileName",i))+"\n"
+                OK_Count += 1
+            end
+        end
+    end
+    
+    if Mail_License == "\n    Running License Check:\n"
+        Mail_License += '[ERROR] No proper entry information found\n'
+    end
+    
+    if  OK_Count <= 0
+        dic.update({"Licenses":"OK"})
+    else
+        dic.update({"Licenses":"***** NOT OK *****"})
+    end   
+    
+    return Mail_License,Info_log
+end
+
+
+################ Check Licenses SRAN9 ################
+def Check_Licenses_SRAN9()
+
+    ClearMMLBuffer()
+    Mail_License = "\n    Running License Check:\n"
+    @LST LICENSE:;
+    mml = GetMMLReport()
+    strLicense = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strLicense or GetResultCode(strLicense) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strLicense), GetResultCause(strLicense)))
+        Mail_License += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strLicense))+"Reason: "+ str(GetResultCause(strLicense))+"\n"
+        dic.update({"Licenses":"ERROR"})
+        return Mail_License,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strLicense) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_License += '[ERROR] No proper entry information found\n'
+        dic.update({"Licenses":"ERROR"})
+        return Mail_License,Info_log
+    end
+    
+    # Check Status
+    Num_License = GetRecordNum(strLicense,0)
+    OK_Count = 0
+    for i in range (Num_License)
+        value = GetAttrValueByIdx(strLicense,0,2,i)
+        # Lic_Flag=GetAttrValueByName(strLicense,0,"IsCurrentLicense",%i))
+        if value == 'Y'
+            value_2 = GetAttrValueByIdx(strLicense,0,1,i)
+            if "lic" in value_2
+                Print("OK ... Active License is "+ str(GetAttrValueByName(strLicense,0,"LicenseFileName",i)))
+                Mail_License += "OK ... Active License is "+ str(GetAttrValueByName(strLicense,0,"LicenseFileName",i))+"\n"
+            else
+                Print("NOK ... Active License is "+ str(GetAttrValueByName(strLicense,0,"LicenseFileName",i)))
+                Mail_License += "NOK ... Active License is "+ str(GetAttrValueByName(strLicense,0,"LicenseFileName",i))+"\n"
+                OK_Count += 1
+            end
+        end
+    end
+    
+    if Mail_License == "\n    Running License Check:\n"
+        Mail_License += '[ERROR] No proper entry information found\n'
+    end
+    
+    if  OK_Count <= 0
+        dic.update({"Licenses":"OK"})
+    else
+        dic.update({"Licenses":"***** NOT OK *****"})
+    end   
+    
+    return Mail_License,Info_log
+end
+
+################ Check Licenses SRAN10 ################
+def Check_Licenses_SRAN10()
+
+    ClearMMLBuffer()
+    Mail_License = "\n    Running License Check:\n"
+    @LST LICENSE:;
+    mml = GetMMLReport()
+    strLicense = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strLicense or GetResultCode(strLicense) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strLicense), GetResultCause(strLicense)))
+        Mail_License += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strLicense))+"Reason: "+ str(GetResultCause(strLicense))+"\n"
+        dic.update({"Licenses":"ERROR"})
+        return Mail_License,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strLicense) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_License += '[ERROR] No proper entry information found\n'
+        dic.update({"Licenses":"ERROR"})
+        return Mail_License,Info_log
+    end
+    
+    # Check Status
+    Num_License = GetRecordNum(strLicense,0)
+    OK_Count = 0
+    for i in range (Num_License)
+        value = GetAttrValueByIdx(strLicense,0,2,i)
+        # Lic_Flag=GetAttrValueByName(strLicense,0,"IsCurrentLicense",%i))
+        if value == 'Y'
+            value_2 = GetAttrValueByIdx(strLicense,0,1,i)
+			ClearMMLBuffer()
+			@DSP LICINFO:;
+			mml = GetMMLReport()
+			licinfo = ParseMMLRpt(mml)
+			attriblicinfo = GetAttrValueByName(licinfo,0,"Status",i)
+			if "Normal" in attriblicinfo
+				Print("OK ... Active and Permanent License is "+ str(GetAttrValueByName(strLicense,0,"LicenseFileName",i)))
+                Mail_License += "OK ... Active and Permanent License is "+ str(GetAttrValueByName(strLicense,0,"LicenseFileName",i))+"\n"
+            else
+                Print("NOK ... Active License isn't Permanent -> "+ str(GetAttrValueByName(strLicense,0,"LicenseFileName",i)))
+                Mail_License += "NOK ... Active License isn't Permanent -> "+ str(GetAttrValueByName(strLicense,0,"LicenseFileName",i))+"\n"
+                OK_Count += 1
+            end
+
+        end
+    end
+    
+    if Mail_License == "\n    Running License Check:\n"
+        Mail_License += '[ERROR] No proper entry information found\n'
+    end
+    
+    if  OK_Count <= 0
+        dic.update({"Licenses":"OK"})
+    else
+        dic.update({"Licenses":"***** NOT OK *****"})
+    end   
+    
+    return Mail_License,Info_log
+end
+ 
+################ Check Software Version ################ 
+def Check_SW()
+
+    Mail_SW = "\n    Software Version Check:\n"
+    @LST VER:;
+    mml = GetMMLReport()
+    strSW = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strSW or GetResultCode(strSW) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strSW), GetResultCause(strSW)) ) 
+        Mail_SW += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strSW))+"Reason: "+ str(GetResultCause(strSW))+"\n"
+        dic.update({"Software Version":"ERROR"})
+        dic.update({"SW_Version":"ERROR"})
+        return Mail_SW,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strSW) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_SW += '[ERROR] No proper entry information found\n'    
+        dic.update({"Software Version":"ERROR"})
+        dic.update({"SW_Version":"ERROR"})        
+        return Mail_SW,Info_log
+    end
+    
+    # Check Status  
+    OK_Count = 0
+    value_SW = GetAttrValueByName(strSW,0,"Current Software Status",0)
+    if value_SW == 'Normal'
+        Print("OK ... Current Software Version is: "+str(GetAttrValueByName(strSW,0,"Current Software Version",0))+" and the Status is: "+str(GetAttrValueByName(strSW,0,"Current Software Status",0)))
+        Mail_SW += "OK ... Current Software Version is: "+str(GetAttrValueByName(strSW,0,"Current Software Version",0))+" and the Status is: "+str(GetAttrValueByName(strSW,0,"Current Software Status",0))+"\n"
+    else
+        Print("NOK ... Current Software Version is: "+str(GetAttrValueByName(strSW,0,"Current Software Version",0))+" and the Status is: "+str(GetAttrValueByName(strSW,0,"Current Software Status",0)))
+        Mail_SW += "NOK ... Current Software Version is: "+str(GetAttrValueByName(strSW,0,"Current Software Version",0))+" and the Status is: "+str(GetAttrValueByName(strSW,0,"Current Software Status",0))+"\n"
+        OK_Count += 1
+    end
+    
+    
+    if  OK_Count <= 0
+        dic.update({"Software Version":"OK"})
+    else
+        dic.update({"Software Version":"***** NOT OK *****"})
+    end 
+        dic.update({"SW_Version":""+ str(GetAttrValueByName(strSW,0,"Current Software Version",0))})
+    
+    return Mail_SW,Info_log
+end
+
+################ Check Cell State ################ 
+def Check_CellState()
+
+    ClearMMLBuffer()
+    Mail_Cell = "\n    Cell operational state:\n"
+    @DSP CELL:;
+    mml = GetMMLReport()
+    strCell = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strCell or GetResultCode(strCell) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strCell), GetResultCause(strCell))) 
+        Mail_Cell += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strCell))+"Reason: "+ str(GetResultCause(strCell))
+        dic.update({"Cells Status":"ERROR"})
+        dic.update({"Cells by Operator":"ERROR"})
+        return Mail_Cell,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strCell) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_Cell += '[ERROR] No proper entry information found\n'
+        dic.update({"Cells Status":"ERROR"})
+        dic.update({"Cells by Operator":"ERROR"})
+        return Mail_Cell,Info_log
+    end
+    
+    # Check Status
+    OK_Count = 0
+    Operator_TEF = 0
+    Operator_VF = 0
+    Num_Cell = GetRecordNum(strCell,0) 
+    for l in range (Num_Cell)
+        Cell_id=(GetAttrValueByName(strCell,0,"Local cell ID",l))
+        Cell_name=(GetAttrValueByName(strCell,0,"Cell Name",l))
+        if 'T' in Cell_name
+            Operator_TEF += 1
+        else
+            Operator_VF += 1
+        end
+    
+    
+        valuestate = GetAttrValueByIdx(strCell,0,1,l)
+        #Print(valuestate)
+        if valuestate != 'Normal'
+            Print("NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local cell ID",l))+" is "+str(GetAttrValueByIdx(strCell,0,1,l)))
+            Mail_Cell += "NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local cell ID",l))+"is "+str(GetAttrValueByIdx(strCell,0,1,l))+"\n"
+            OK_Count += 1
+        else
+            valuereason = GetAttrValueByIdx(strCell,0,2,l)
+            if valuereason != 'Cell setup successfully'
+                Print("NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local cell ID",l))+" is "+str(GetAttrValueByIdx(strCell,0,2,l)))
+                Mail_Cell += "NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local cell ID",l))+" is "+str(GetAttrValueByIdx(strCell,0,2,l))+"\n"
+                OK_Count += 1
+            else
+                Print("OK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local cell ID",l))+" is " +str(GetAttrValueByIdx(strCell,0,1,l)))
+                Mail_Cell += "OK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local cell ID",l))+" is " +str(GetAttrValueByIdx(strCell,0,1,l))+"\n"
+            end
+        end
+    end
+    
+    Mail_Cell += "\t    Operator_A Cells = "+str(Operator_VF)+"\n / Operator_B Cells = "+str(Operator_TEF)+"\n"
+    dic.update({"Cells by Operator":"Operator_A Cells = "+str(Operator_VF)+" / Operator_B Cells = "+str(Operator_TEF)})
+    if  OK_Count <= 0
+        dic.update({"Cells Status":"OK"})
+    else
+        dic.update({"Cells Status":"***** NOT OK *****"})
+    end     
+    
+    return Mail_Cell,Info_log
+end   
+
+
+################ Check Cell State ################ 
+def Check_CellState_SRAN9()
+
+    ClearMMLBuffer()
+    Mail_Cell = "\n    Cell operational state:\n"
+    @DSP CELL:;
+    mml = GetMMLReport()
+    strCell = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strCell or GetResultCode(strCell) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strCell), GetResultCause(strCell))) 
+        Mail_Cell += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strCell))+"Reason: "+ str(GetResultCause(strCell))
+        dic.update({"Cells Status":"ERROR"})
+        dic.update({"Cells by Operator":"ERROR"})
+        return Mail_Cell,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strCell) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_Cell += '[ERROR] No proper entry information found\n'
+        dic.update({"Cells Status":"ERROR"})
+        dic.update({"Cells by Operator":"ERROR"})
+        return Mail_Cell,Info_log
+    end
+    
+    # Check Status
+    OK_Count = 0
+    Operator_TEF = 0
+    Operator_VF = 0
+    Num_Cell = GetRecordNum(strCell,0) 
+    for l in range (Num_Cell)
+        Cell_id=(GetAttrValueByName(strCell,0,"Local Cell ID",l))
+        if int(Cell_id) >= 7
+            Operator_TEF += 1
+        else
+            Operator_VF += 1
+        end
+    
+    
+        valuestate = GetAttrValueByIdx(strCell,0,1,l)
+        #Print(valuestate)
+        if valuestate != 'Normal'
+            Print("NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is "+str(GetAttrValueByIdx(strCell,0,1,l)))
+            Mail_Cell += "NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+"is "+str(GetAttrValueByIdx(strCell,0,1,l))+"\n"
+            OK_Count += 1
+        else
+            valuereason = GetAttrValueByIdx(strCell,0,2,l)
+            if valuereason != 'Cell setup successfully'
+                Print("NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is "+str(GetAttrValueByIdx(strCell,0,2,l)))
+                Mail_Cell += "NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is "+str(GetAttrValueByIdx(strCell,0,2,l))+"\n"
+                OK_Count += 1
+            else
+                Print("OK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is " +str(GetAttrValueByIdx(strCell,0,1,l)))
+                Mail_Cell += "OK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is " +str(GetAttrValueByIdx(strCell,0,1,l))+"\n"
+            end
+        end
+    end
+    
+    Mail_Cell += "\n\t    Operator_A Cells = "+str(Operator_VF)+" / Operator_B Cells = "+str(Operator_TEF)+"\n"
+    dic.update({"Cells by Operator":"Operator_A Cells = "+str(Operator_VF)+" / Operator_B Cells = "+str(Operator_TEF)})
+    if  OK_Count <= 0
+        dic.update({"Cells Status":"OK"})
+    else
+        dic.update({"Cells Status":"***** NOT OK *****"})
+    end     
+    
+    return Mail_Cell,Info_log
+end   
+
+################ Check Cell State SRAN10 ################ 
+def Check_CellState_SRAN10()
+
+    ClearMMLBuffer()
+    Mail_Cell = "\n    Cell operational state:\n"
+    @DSP CELL:;
+    mml = GetMMLReport()
+    strCell = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strCell or GetResultCode(strCell) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strCell), GetResultCause(strCell))) 
+        Mail_Cell += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strCell))+"Reason: "+ str(GetResultCause(strCell))
+        dic.update({"Cells Status":"ERROR"})
+        dic.update({"Cells by Operator":"ERROR"})
+        return Mail_Cell,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strCell) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_Cell += '[ERROR] No proper entry information found\n'
+        dic.update({"Cells Status":"ERROR"})
+        dic.update({"Cells by Operator":"ERROR"})
+        return Mail_Cell,Info_log
+    end
+    
+    # Check Status
+    OK_Count = 0
+    Operator_TEF = 0
+    Operator_VF = 0
+    Num_Cell = GetRecordNum(strCell,0) 
+    for l in range (Num_Cell)
+        Cell_id=(GetAttrValueByName(strCell,0,"Local Cell ID",l))
+        if int(Cell_id) >= 7
+            Operator_TEF += 1
+        else
+            Operator_VF += 1
+        end
+    
+    
+        valuestate = GetAttrValueByIdx(strCell,0,1,l)
+        #Print(valuestate)
+        if valuestate != 'Normal'
+            Print("NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is "+str(GetAttrValueByIdx(strCell,0,1,l)))
+            Mail_Cell += "NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+"is "+str(GetAttrValueByIdx(strCell,0,1,l))+"\n"
+            OK_Count += 1
+        else
+            valuereason = GetAttrValueByIdx(strCell,0,2,l)
+            if valuereason != 'Cell setup succeeded.'
+                Print("NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is "+str(GetAttrValueByIdx(strCell,0,2,l)))
+                Mail_Cell += "NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is "+str(GetAttrValueByIdx(strCell,0,2,l))+"\n"
+                OK_Count += 1
+            else
+                Print("OK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is " +str(GetAttrValueByIdx(strCell,0,1,l)))
+                Mail_Cell += "OK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is " +str(GetAttrValueByIdx(strCell,0,1,l))+"\n"
+            end
+        end
+    end
+    
+    Mail_Cell += "\n\t    Operator_A Cells = "+str(Operator_VF)+" / Operator_B Cells = "+str(Operator_TEF)+"\n"
+    dic.update({"Cells by Operator":"Operator_A Cells = "+str(Operator_VF)+" / Operator_B Cells = "+str(Operator_TEF)})
+    if  OK_Count <= 0
+        dic.update({"Cells Status":"OK"})
+    else
+        dic.update({"Cells Status":"***** NOT OK *****"})
+    end     
+    
+    return Mail_Cell,Info_log
+end   
+
+################ Check Cell State SRAN11 ################ 
+def Check_CellState_SRAN11()
+
+    ClearMMLBuffer()
+    Mail_Cell = "\n    Cell operational state:\n"
+    @DSP CELL:;
+    mml = GetMMLReport()
+    strCell = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strCell or GetResultCode(strCell) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strCell), GetResultCause(strCell))) 
+        Mail_Cell += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strCell))+"Reason: "+ str(GetResultCause(strCell))
+        dic.update({"Cells Status":"ERROR"})
+        dic.update({"Cells by Operator":"ERROR"})
+        return Mail_Cell,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strCell) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_Cell += '[ERROR] No proper entry information found\n'
+        dic.update({"Cells Status":"ERROR"})
+        dic.update({"Cells by Operator":"ERROR"})
+        return Mail_Cell,Info_log
+    end
+    
+    # Check Status
+    OK_Count = 0
+    Operator_TEF = 0
+    Operator_VF = 0
+    Num_Cell = GetRecordNum(strCell,0) 
+    for l in range (Num_Cell)
+        #Cell_id=(GetAttrValueByName(strCell,0,"Local Cell ID",l))
+        #if int(Cell_id) in range (7,12) or int(Cell_id) in range (15,16)
+        #    Operator_TEF += 1
+        #else
+        #    Operator_VF += 1
+        #end
+        Cell_name=(GetAttrValueByName(strCell,0,"Cell Name",l))
+        if "T" in Cell_name
+            Operator_TEF += 1
+        else
+            Operator_VF += 1
+        end
+        
+            
+        valuestate = GetAttrValueByIdx(strCell,0,2,l)
+        #Print(valuestate)
+        if valuestate != 'Normal'
+            Print("NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is "+str(GetAttrValueByIdx(strCell,0,1,l)))
+            Mail_Cell += "NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+"is "+str(GetAttrValueByIdx(strCell,0,1,l))+"\n"
+            OK_Count += 1
+        else
+            valuereason = GetAttrValueByIdx(strCell,0,3,l)
+            if valuereason != 'Cell setup succeeded.'
+                Print("NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is "+str(GetAttrValueByIdx(strCell,0,2,l)))
+                Mail_Cell += "NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is "+str(GetAttrValueByIdx(strCell,0,2,l))+"\n"
+                OK_Count += 1
+            else
+                Print("OK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is " +str(GetAttrValueByIdx(strCell,0,1,l)))
+                Mail_Cell += "OK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is " +str(GetAttrValueByIdx(strCell,0,1,l))+"\n"
+            end
+        end
+    end
+    
+    Mail_Cell += "\n\t    Operator_A Cells = "+str(Operator_VF)+" / Operator_B Cells = "+str(Operator_TEF)+"\n"
+    dic.update({"Cells by Operator":"Operator_A Cells = "+str(Operator_VF)+" / Operator_B Cells = "+str(Operator_TEF)})
+    if  OK_Count <= 0
+        dic.update({"Cells Status":"OK"})
+    else
+        dic.update({"Cells Status":"***** NOT OK *****"})
+    end     
+    
+    return Mail_Cell,Info_log
+end   
+
+################ Check Cell State SRAN12 OR SRAN15 ################ 
+def Check_CellState_SRAN12()
+
+    ClearMMLBuffer()
+    Mail_Cell = "\n    Cell operational state:\n"
+    @DSP CELL:;
+    mml = GetMMLReport()
+    strCell = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strCell or GetResultCode(strCell) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strCell), GetResultCause(strCell))) 
+        Mail_Cell += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strCell))+"Reason: "+ str(GetResultCause(strCell))
+        dic.update({"Cells Status":"ERROR"})
+        dic.update({"Cells by Operator":"ERROR"})
+        return Mail_Cell,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strCell) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_Cell += '[ERROR] No proper entry information found\n'
+        dic.update({"Cells Status":"ERROR"})
+        dic.update({"Cells by Operator":"ERROR"})
+        return Mail_Cell,Info_log
+    end
+    
+    # Check Status
+    OK_Count = 0
+    Operator_TEF = 0
+    Operator_VF = 0
+    Num_Cell = GetRecordNum(strCell,0) 
+    for l in range (Num_Cell)
+        #Cell_id=(GetAttrValueByName(strCell,0,"Local Cell ID",l))
+        #if int(Cell_id) in range (7,12) or int(Cell_id) in range (15,16)
+        #    Operator_TEF += 1
+        #else
+        #    Operator_VF += 1
+        #end
+        Cell_name=(GetAttrValueByName(strCell,0,"Cell Name",l))
+        if "T" in Cell_name
+            Operator_TEF += 1
+        else
+            Operator_VF += 1
+        end
+        
+            
+        valuestate = GetAttrValueByIdx(strCell,0,2,l)
+        #Print(valuestate)
+        if valuestate != 'Normal'
+            Print("NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is "+str(GetAttrValueByIdx(strCell,0,1,l)))
+            Mail_Cell += "NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+"is "+str(GetAttrValueByIdx(strCell,0,1,l))+"\n"
+            OK_Count += 1
+        else
+            valuereason = GetAttrValueByIdx(strCell,0,3,l)
+            if valuereason != 'Cell setup succeeded.'
+                Print("NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is "+str(GetAttrValueByIdx(strCell,0,2,l)))
+                Mail_Cell += "NOK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is "+str(GetAttrValueByIdx(strCell,0,2,l))+"\n"
+                OK_Count += 1
+            else
+                Print("OK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is " +str(GetAttrValueByIdx(strCell,0,1,l)))
+                Mail_Cell += "OK ... Local Cell ID = "+ str(GetAttrValueByName(strCell,0,"Local Cell ID",l))+" is " +str(GetAttrValueByIdx(strCell,0,1,l))+"\n"
+            end
+        end
+    end
+    
+    Mail_Cell += "\n\t    Operator_A Cells = "+str(Operator_VF)+" / Operator_B Cells = "+str(Operator_TEF)+"\n"
+    dic.update({"Cells by Operator":"Operator_A Cells = "+str(Operator_VF)+" / Operator_B Cells = "+str(Operator_TEF)})
+    if  OK_Count <= 0
+        dic.update({"Cells Status":"OK"})
+    else
+        dic.update({"Cells Status":"***** NOT OK *****"})
+    end     
+    
+    return Mail_Cell,Info_log
+end   
+
+################ Check VSWR ################
+def Check_VSWR()
+
+    ClearMMLBuffer()
+    Mail_VSWR = "\n    VSWR Remote Test:\n"
+    @STR VSWRTEST:;
+    mml = GetMMLReport(-1)
+    #Print(mml)
+    '''mml = +++    LTE_SITE_EXAMPLE        2014-11-12 09:04:08
+O&M    #EXAMPLE
+%%/*EXAMPLE*/STR VSWRTEST:;%%
+RETCODE = 0  Progress report, Operation succeeded.
+
+Report Type  =  VSWR Query
+     Status  =  Success
+ Session ID  =  66273
+ 
+ VSWR Query Result
+-----------------
+BS Name          Sector No.  Cabinet No.  Subrack No.  Slot No.  TX Channel No.  VSWR(0.01)
+
+LTE_SITE_EXAMPLE  0           0            4            6         0               125       
+LTE_SITE_EXAMPLE  0           0            4            6         1               131       
+LTE_SITE_EXAMPLE  1           0            4            7         0               130       
+LTE_SITE_EXAMPLE  1           0            4            7         1               128       
+LTE_SITE_EXAMPLE  2           0            4            8         0               126       
+LTE_SITE_EXAMPLE  2           0            4            8         1               140       
+(Number of results = 6)
+
+---    END'''
+    strVSWR = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strVSWR or GetResultCode(strVSWR) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strVSWR), GetResultCause(strVSWR))) 
+        Mail_VSWR += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strVSWR))+"Reason: "+ str(GetResultCause(strVSWR))+"\n"
+        dic.update({"VSWR":"ERROR"})
+        return Mail_VSWR,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strVSWR) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_VSWR += '[ERROR] No proper entry information found\n'
+        dic.update({"VSWR":"ERROR"})
+        return Mail_VSWR,Info_log
+    end
+    
+    # Check Status     
+    OK_Count = 0
+	error = 0
+    Num_VSWR=GetRecordNum(strVSWR,1)       
+    for j in range (Num_VSWR)
+        value_sector = GetAttrValueByIdx(strVSWR,1,2,j)
+        value_VSWR = GetAttrValueByIdx(strVSWR,1,7,j)
+        Print("VSWR="+value_VSWR)
+        if value_sector!= ""
+            if value_sector != 'NULL'
+                if    value_VSWR != 'NULL'
+                    value_real = int(value_VSWR)*0.01
+                    if int(value_VSWR) >= 150
+                        Print("NOK ... VSWR Value of sector: "+str(GetAttrValueByIdx(strVSWR,1,2,j))+" is: "+str(value_real))
+                        Mail_VSWR += "NOK ... VSWR Value of sector: "+str(GetAttrValueByIdx(strVSWR,1,2,j))+" is: "+str((value_real))+"\n"  
+                        OK_Count += 1
+                    else
+                        Print("OK ... VSWR Value of sector: "+str(GetAttrValueByIdx(strVSWR,1,2,j))+" is: "+str((value_real)))
+                        Mail_VSWR += "OK ... VSWR Value of sector: "+str(GetAttrValueByIdx(strVSWR,1,2,j))+" is: "+str(value_real)+"\n"   
+                    end
+                else
+                    Print("[ERROR] VSWR Value = NULL")
+                    Mail_VSWR += "[ERROR] VSWR Value = NULL\n"
+                    error += 1    
+                end
+           else
+                Print("[ERROR] Sector ID = NULL")
+                Mail_VSWR += "[ERROR] Sector ID = NULL\n"
+                error += 1    
+            end
+        else
+            Print("[ERROR] ERROR IN PARSING OUTPUT. COMMAND NEEDS TO BE PERFORMED AGAIN")
+            Mail_VSWR += "[ERROR] ERROR IN PARSING OUTPUT. COMMAND NEEDS TO BE PERFORMED AGAIN\n"
+            error += 1
+        end
+    end
+    
+    if  OK_Count <= 0
+        dic.update({"VSWR":"OK"})
+	elif error >= 0
+		dic.update({"VSWR":"NOT OK"})
+    else
+        dic.update({"VSWR":"***** NOT OK *****"})
+    end 
+    
+    return Mail_VSWR,Info_log
+end
+
+
+
+################ Check VSWR SRAN9 ################
+def Check_VSWR_SRAN9()
+
+    ClearMMLBuffer()
+    Mail_VSWR = "\n    VSWR Remote Test:\n"
+    @STR VSWRTEST:;
+    mml = GetMMLReport(-1)
+    #Print(mml)
+    '''mml = +++    LTE_SITE_EXAMPLE        2014-11-18 10:35:42
+O&M    #EXAMPLE
+%%/*EXAMPLE*/STR VSWRTEST:;%%
+RETCODE = 0  Progress report, Operation succeeded.
+
+Report Type  =  VSWR Query
+     Status  =  Success
+ Session ID  =  67267
+
+VSWR Query Result
+-----------------
+BS Name          Sector No.  Cabinet No.  Subrack No.  Slot No.  TX Channel No.  VSWR(0.01)
+Office Name  Site No.  Sector No.  Cabinet No.  Subrack No.  Slot No.  TX Channel No.  VSWR(0.01)
+LTE_SITE_EXAMPLE  0           0            4            6         0               120       
+LTE_SITE_EXAMPLE  0           0            4            6         1               110       
+LTE_SITE_EXAMPLE  1           0            4            7         0               115       
+LTE_SITE_EXAMPLE  1           0            4            7         1               110       
+LTE_SITE_EXAMPLE  2           0            4            8         0               110       
+LTE_SITE_EXAMPLE  2           0            4            8         1               110       
+(Number of results = 6)
+
+---    END'''
+    strVSWR = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strVSWR or GetResultCode(strVSWR) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strVSWR), GetResultCause(strVSWR))) 
+        Mail_VSWR += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strVSWR))+"Reason: "+ str(GetResultCause(strVSWR))+"\n"
+        dic.update({"VSWR":"ERROR"})
+        return Mail_VSWR,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strVSWR) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_VSWR += '[ERROR] No proper entry information found\n'
+        dic.update({"VSWR":"ERROR"})
+        return Mail_VSWR,Info_log
+    end
+    
+    # Check Status     
+    OK_Count = 0
+    Num_VSWR=GetRecordNum(strVSWR,1)       
+    for j in range (Num_VSWR)
+        value_sector = GetAttrValueByIdx(strVSWR,1,1,j)
+        value_VSWR = GetAttrValueByIdx(strVSWR,1,6,j)
+        Print("VSWR="+value_VSWR)
+        if value_sector!= ""
+            if value_sector != 'NULL'
+                if    value_VSWR != 'NULL'
+                    value_real = int(value_VSWR)*0.01
+                    if int(value_VSWR) >= 160
+                        Print("NOK ... VSWR Value of sector: "+str(GetAttrValueByIdx(strVSWR,1,1,j))+ "(SRN:"+str(GetAttrValueByIdx(strVSWR,1,3,j))+", SN:"+str(GetAttrValueByIdx(strVSWR,1,4,j))+", TxCh:"+str(GetAttrValueByIdx(strVSWR,1,5,j))+")"+" is: "+str(value_real))
+                        Mail_VSWR += "NOK ... VSWR Value of sector: "+str(GetAttrValueByIdx(strVSWR,1,1,j))+"(SRN:"+str(GetAttrValueByIdx(strVSWR,1,3,j))+", SN:"+str(GetAttrValueByIdx(strVSWR,1,4,j))+", TxCh:"+str(GetAttrValueByIdx(strVSWR,1,5,j))+")"+" is: "+str((value_real))+"\n"  
+                        OK_Count += 1
+                    else
+                        Print("OK ... VSWR Value of sector: "+str(GetAttrValueByIdx(strVSWR,1,1,j))+"(SRN:"+str(GetAttrValueByIdx(strVSWR,1,3,j))+", SN:"+str(GetAttrValueByIdx(strVSWR,1,4,j))+", TxCh:"+str(GetAttrValueByIdx(strVSWR,1,5,j))+")"+" is: "+str((value_real)))
+                        Mail_VSWR += "OK ... VSWR Value of sector: "+str(GetAttrValueByIdx(strVSWR,1,1,j))+"(SRN:"+str(GetAttrValueByIdx(strVSWR,1,3,j))+", SN:"+str(GetAttrValueByIdx(strVSWR,1,4,j))+", TxCh:"+str(GetAttrValueByIdx(strVSWR,1,5,j))+")"+" is: "+str(value_real)+"\n"   
+                    end
+                else
+                    Print("[ERROR] VSWR Value = NULL")
+                    Mail_VSWR += "[ERROR] VSWR Value = NULL\n"
+                    OK_Count += 1    
+                end
+            else
+                Print("[ERROR] Sector ID = NULL")
+                Mail_VSWR += "[ERROR] Sector ID = NULL\n"
+                OK_Count += 1    
+            end
+        else
+            Print("[ERROR] ERROR IN PARSING OUTPUT. COMMAND NEEDS TO BE PERFORMED AGAIN")
+            Mail_VSWR += "[ERROR] ERROR IN PARSING OUTPUT. COMMAND NEEDS TO BE PERFORMED AGAIN\n"
+            OK_Count += 1
+        end
+    end
+    
+    if  OK_Count <= 0
+        dic.update({"VSWR":"OK"})
+    else
+        dic.update({"VSWR":"***** NOT OK *****"})
+    end 
+    
+    return Mail_VSWR,Info_log
+end
+
+################ Check VSWR ################
+def Check_DSP_VSWR()
+
+    ClearMMLBuffer()
+    Mail_VSWR = "\n    DSP VSWR Remote Test:\n"
+    @DSP VSWR:;
+    mml = GetMMLReport()
+    #Print(mml)
+    '''mml = +++    LTE_SITE_EXAMPLE        2015-11-12 08:54:43
+O&M    #EXAMPLE
+%%/*EXAMPLE*/DSP VSWR:;%%
+RETCODE = 0  Operation succeeded.
+
+Dsp VSWR Test Result
+--------------------
+Cabinet No.  Subrack No.  Slot No.  TX Channel No.  VSWR(0.01)
+
+0            5            0         0               110       
+0            5            0         1               110       
+0            5            2         0               110       
+0            5            2         1               110       
+0            5            4         0               110       
+0            5            4         1               110       
+(Number of results = 6)
+
+---    END'''
+    strVSWR = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    # Print(Info_log)
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strVSWR or GetResultCode(strVSWR) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strVSWR), GetResultCause(strVSWR))) 
+        Mail_VSWR += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strVSWR))+"Reason: "+ str(GetResultCause(strVSWR))+"\n"
+        dic.update({"VSWR":"ERROR"})
+        return Mail_VSWR,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strVSWR) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_VSWR += '[ERROR] No proper entry information found\n'
+        dic.update({"VSWR":"ERROR"})
+        return Mail_VSWR,Info_log
+    end
+    
+    # Check Status     
+    OK_Count = 0
+    Num_VSWR=GetRecordNum(strVSWR,0)
+    Print(Num_VSWR)
+    for j in range (Num_VSWR)
+        value_sector = GetAttrValueByIdx(strVSWR,0,2,j)
+        value_VSWR = GetAttrValueByIdx(strVSWR,0,4,j)
+        Print("VSWR="+value_VSWR)
+        if value_sector!= ""
+            if value_sector != 'NULL'
+                if    value_VSWR != 'NULL'
+                    value_real = int(value_VSWR)*0.01
+                    if int(value_VSWR) >= 160
+                        Print("NOK ... VSWR Value of (SRN:"+str(GetAttrValueByIdx(strVSWR,0,1,j))+", SN:"+str(GetAttrValueByIdx(strVSWR,0,2,j))+", TxCh:"+str(GetAttrValueByIdx(strVSWR,0,3,j))+")"+" is: "+str(value_real))
+                        Mail_VSWR += "NOK ... VSWR Value of (SRN:"+str(GetAttrValueByIdx(strVSWR,0,1,j))+", SN:"+str(GetAttrValueByIdx(strVSWR,0,2,j))+", TxCh:"+str(GetAttrValueByIdx(strVSWR,0,3,j))+")"+" is: "+str((value_real))+"\n"  
+                        OK_Count += 1
+                    else
+                        Print("OK ... VSWR Value of (SRN:"+str(GetAttrValueByIdx(strVSWR,0,1,j))+", SN:"+str(GetAttrValueByIdx(strVSWR,0,2,j))+", TxCh:"+str(GetAttrValueByIdx(strVSWR,0,3,j))+")"+" is: "+str((value_real)))
+                        Mail_VSWR += "OK ... VSWR Value of (SRN:"+str(GetAttrValueByIdx(strVSWR,0,1,j))+", SN:"+str(GetAttrValueByIdx(strVSWR,0,2,j))+", TxCh:"+str(GetAttrValueByIdx(strVSWR,0,3,j))+")"+" is: "+str(value_real)+"\n"   
+                    end
+                else
+                    Print("[ERROR] VSWR Value = NULL")
+                    Mail_VSWR += "[ERROR] VSWR Value = NULL\n"
+                    OK_Count += 1    
+                end
+            else
+                Print("[ERROR] Sector ID = NULL")
+                Mail_VSWR += "[ERROR] Sector ID = NULL\n"
+                OK_Count += 1    
+            end
+        else
+            Print("[ERROR] ERROR IN PARSING OUTPUT. COMMAND NEEDS TO BE PERFORMED AGAIN")
+            Mail_VSWR += "[ERROR] ERROR IN PARSING OUTPUT. COMMAND NEEDS TO BE PERFORMED AGAIN\n"
+            OK_Count += 1
+        end
+    end
+    
+    if  OK_Count <= 0
+        dic.update({"VSWR":"OK"})
+    else
+        dic.update({"VSWR":"***** NOT OK *****"})
+    end 
+    
+    return Mail_VSWR,Info_log
+end
+
+
+
+
+
+################ Check RF Interference ################
+def Check_Interference(location)
+
+    ClearMMLBuffer()
+    Mail_RF = ""
+    CMD = ("STR RFTEST:TSTTYPE=PIMOFFLINE,"+str(location))
+    #Print (CMD)
+    SendMML(CMD)
+    #@STR RFTEST:TSTTYPE=PIMOFFLINE,CN=0,SRN=5,SN=2;
+    mml = GetMMLReport(-1)
+    #Print(mml)
+    strRF = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    OK_Count = 1
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strRF or GetResultCode(strRF) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strRF), GetResultCause(strRF)) ) 
+        Mail_RF += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strRF))+"Reason: "+ str(GetResultCause(strRF))
+        return Mail_RF,Info_log,OK_Count
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strRF) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_RF += '[ERROR] No proper entry information found\n'      
+        return Mail_RF,Info_log,OK_Count
+    end
+    
+    # Check Status  
+    Num_RF=GetRecordNum(strRF,1)
+    #Print(Num_RF)
+    OK_Count = 0
+    for m in range (Num_RF)
+        CNID=GetAttrValueByIdx(strRF,1,0,m)
+        SRNID=GetAttrValueByIdx(strRF,1,1,m)
+        SNID=GetAttrValueByIdx(strRF,1,2,m)
+        ANTID=GetAttrValueByIdx(strRF,1,3,m)
+        value_RF = GetAttrValueByIdx(strRF,1,4,m)
+        if value_RF != ""
+            if value_RF == 'It is not interfered'
+                Print("OK ... CN="+str(CNID)+",SRN="+str(SRNID)+",SN="+str(SNID)+",ANTP="+str(ANTID)+":"+str(GetAttrValueByIdx(strRF,1,4,m)))
+                Mail_RF += "OK ... CN="+str(CNID)+",SRN="+str(SRNID)+",SN="+str(SNID)+",ANTP="+str(ANTID)+":"+str(GetAttrValueByIdx(strRF,1,4,m))
+            else
+                Print("NOK ... CN="+str(CNID)+",SRN="+str(SRNID)+",SN="+str(SNID)+",ANTP="+str(ANTID)+":"+str(GetAttrValueByIdx(strRF,1,4,m)))
+                Mail_RF += "NOK ... CN="+str(CNID)+",SRN="+str(SRNID)+",SN="+str(SNID)+",ANTP="+str(ANTID)+":"+str(GetAttrValueByIdx(strRF,1,4,m))
+                OK_Count += 1
+            end
+        elif value_VSWR != 'NULL' 
+            Print("[ERROR] ERROR IN PARSING OUTPUT. COMMAND NEEDS TO BE PERFORMED AGAIN")
+            Mail_VSWR += "[ERROR] ERROR IN PARSING OUTPUT. COMMAND NEEDS TO BE PERFORMED AGAIN\n"
+            OK_Count += 1
+        end
+    end
+        
+    return Mail_RF,Info_log,OK_Count
+end
+
+################ Check RF Interference ################
+def Check_Board()
+    
+    ClearMMLBuffer()
+    Mail_Board = "\n    Offline Antenna Interference Detection Test:\n"
+    @DSP BRD:;
+    mml = GetMMLReport()
+    strBoard = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strBoard or GetResultCode(strBoard) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strBoard), GetResultCause(strBoard)) ) 
+        Mail_Board += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strBoard))+"Reason: "+ str(GetResultCause(strBoard))+"\n"
+        dic.update({"PIM Test":"ERROR"})
+        return Mail_Board,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strBoard) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_Board += '[ERROR] No proper entry information found\n'
+        dic.update({"PIM Test":"ERROR"})
+        return Mail_Board,Info_log  
+    end
+    # Check Status      
+    Num_Board = GetRecordNum(strBoard,0)
+    OK_Count = 0
+    for n in range (Num_Board)
+        valueboard = GetAttrValueByIdx(strBoard,0,3,n) #Board Type
+        if 'RFU' in valueboard
+            BRD_CNID=GetAttrValueByIdx(strBoard,0,0,n)
+            BRD_SRNID=GetAttrValueByIdx(strBoard,0,1,n)
+            BRD_SNID=GetAttrValueByIdx(strBoard,0,2,n)
+            location = "CN="+str(BRD_CNID)+",SRN="+str(BRD_SRNID)+",SN="+str(BRD_SNID)+";"
+            Mail_Bo,Info_log_interf,OK_Interf = Check_Interference(location)
+            Mail_Board += str(Mail_Bo)+"\n"
+            Info_log += str(Info_log_interf)
+            OK_Count += int(OK_Interf)
+        end
+    end
+    
+    
+    if  OK_Count <= 0
+        dic.update({"PIM Test":"OK"})
+    else
+        dic.update({"PIM Test":"***** NOT OK *****"})
+    end 
+    
+    return Mail_Board,Info_log
+end
+
+
+
+
+################ Check RF Interference ################
+def Check_Interference_SRAN9(location)
+
+    ClearMMLBuffer()
+    Mail_RF = ""
+    CMD = ("STR RFTEST:TSTTYPE=PIMONTRAFFIC_ONLINE,"+str(location))
+    #Print (CMD)
+    SendMML(CMD)
+    #@STR RFTEST:TSTTYPE=PIMONTRAFFIC_ONLINE,CN=1,SRN=1,SN=1;
+    mml = GetMMLReport(-1)
+    #Print(mml)
+    strRF = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    OK_Count = 1
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strRF or GetResultCode(strRF) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strRF), GetResultCause(strRF)) ) 
+        Mail_RF += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strRF))+"Reason: "+ str(GetResultCause(strRF))
+        return Mail_RF,Info_log,OK_Count
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strRF) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_RF += '[ERROR] No proper entry information found\n'      
+        return Mail_RF,Info_log,OK_Count
+    end
+    
+    # Check Status  
+    Num_RF=GetRecordNum(strRF,1)
+    #Print(Num_RF)
+    OK_Count = 0
+    for m in range (Num_RF)
+        CNID=GetAttrValueByIdx(strRF,1,1,m)
+        SRNID=GetAttrValueByIdx(strRF,1,2,m)
+        SNID=GetAttrValueByIdx(strRF,1,3,m)
+        ANTID=GetAttrValueByIdx(strRF,1,4,m)
+        value_RF = GetAttrValueByIdx(strRF,1,5,m)
+        if value_RF != ""
+            if value_RF == 'It is not interfered'
+                Print("OK ... CN="+str(CNID)+",SRN="+str(SRNID)+",SN="+str(SNID)+",ANTP="+str(ANTID)+":"+str(GetAttrValueByIdx(strRF,1,5,m)))+"  - RTWP Delta Value (0.1dB)= "+str(GetAttrValueByIdx(strRF,1,6,m))+" - RTWP Max Value (0.1dBm)= "+str(GetAttrValueByIdx(strRF,1,7,m))
+                Mail_RF += "OK ... CN="+str(CNID)+",SRN="+str(SRNID)+",SN="+str(SNID)+",ANTP="+str(ANTID)+":"+str(GetAttrValueByIdx(strRF,1,5,m))+"  - RTWP Delta Value (0.1dB)= "+str(GetAttrValueByIdx(strRF,1,6,m))+" - RTWP Max Value (0.1dBm)= "+str(GetAttrValueByIdx(strRF,1,7,m))
+            else
+                Print("NOK ... CN="+str(CNID)+",SRN="+str(SRNID)+",SN="+str(SNID)+",ANTP="+str(ANTID)+":"+str(GetAttrValueByIdx(strRF,1,5,m)))+"  - RTWP Delta Value (0.1dB)= "+str(GetAttrValueByIdx(strRF,1,6,m))+" - RTWP Max Value (0.1dBm)= "+str(GetAttrValueByIdx(strRF,1,7,m))
+                Mail_RF += "NOK ... CN="+str(CNID)+",SRN="+str(SRNID)+",SN="+str(SNID)+",ANTP="+str(ANTID)+":"+str(GetAttrValueByIdx(strRF,1,5,m))+"  - RTWP Delta Value (0.1dB)= "+str(GetAttrValueByIdx(strRF,1,6,m))+" - RTWP Max Value (0.1dBm)= "+str(GetAttrValueByIdx(strRF,1,7,m))
+                OK_Count += 1
+            end
+        elif value_VSWR != 'NULL' 
+            Print("[ERROR] ERROR IN PARSING OUTPUT. COMMAND NEEDS TO BE PERFORMED AGAIN")
+            Mail_VSWR += "[ERROR] ERROR IN PARSING OUTPUT. COMMAND NEEDS TO BE PERFORMED AGAIN\n"
+            OK_Count += 1
+        end
+    end
+        
+    return Mail_RF,Info_log,OK_Count
+end
+
+################ Check RF Interference ################
+def Check_Board_SRAN9()
+    
+    ClearMMLBuffer()
+    Mail_Board = "\n    Offline Antenna Interference Detection Test:\n"
+    @DSP BRD:;
+    mml = GetMMLReport()
+    strBoard = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strBoard or GetResultCode(strBoard) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strBoard), GetResultCause(strBoard)) ) 
+        Mail_Board += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strBoard))+"Reason: "+ str(GetResultCause(strBoard))+"\n"
+        dic.update({"PIM Test":"ERROR"})
+        return Mail_Board,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strBoard) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_Board += '[ERROR] No proper entry information found\n'
+        dic.update({"PIM Test":"ERROR"})
+        return Mail_Board,Info_log  
+    end
+    # Check Status      
+    Num_Board = GetRecordNum(strBoard,0)
+    OK_Count = 0
+    for n in range (Num_Board)
+        valueboard = GetAttrValueByIdx(strBoard,0,3,n) #Board Type
+        if 'RFU' in valueboard
+            BRD_CNID=GetAttrValueByIdx(strBoard,0,0,n)
+            BRD_SRNID=GetAttrValueByIdx(strBoard,0,1,n)
+            BRD_SNID=GetAttrValueByIdx(strBoard,0,2,n)
+            location = "CN="+str(BRD_CNID)+",SRN="+str(BRD_SRNID)+",SN="+str(BRD_SNID)+";"
+            Mail_Bo,Info_log_interf,OK_Interf = Check_Interference_SRAN9(location)
+            Mail_Board += str(Mail_Bo)+"\n"
+            Info_log += str(Info_log_interf)
+            OK_Count += int(OK_Interf)
+        end
+    end
+    
+    
+    if  OK_Count <= 0
+        dic.update({"PIM Test":"OK"})
+    else
+        dic.update({"PIM Test":"***** NOT OK *****"})
+    end 
+    
+    return Mail_Board,Info_log
+end
+
+
+
+
+
+
+
+
+
+
+
+
+################ Check S1 Interfaces ################
+def Check_S1Interfaces()
+    
+    ClearMMLBuffer()
+    Mail_S1Interface = "\n    S1-MME interface state:\n"
+    @DSP S1INTERFACE:;
+    mml = GetMMLReport()
+    strS1Interface = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strS1Interface or GetResultCode(strS1Interface) != '0' 
+        Print('[ERROR]  FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strS1Interface), GetResultCause(strS1Interface))) 
+        Mail_S1Interface += "[ERROR]  FAILED Command Execution "+str(GetMMLCmd(strS1Interface))+"Reason: "+ str(GetResultCause(strS1Interface))+"\n"
+        dic.update({"S1 Interfaces":"ERROR"})
+        dic.update({"Number VDF MME":"ERROR"})
+        return Mail_S1Interface,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strS1Interface) < 1 
+        Print('[ERROR]  No proper entry information found')
+        Mail_S1Interface += '[ERROR]  No proper entry information found\n'
+        dic.update({"S1 Interfaces":"ERROR"})
+        dic.update({"Number VDF MME":"ERROR"})
+        return Mail_S1Interface,Info_log
+    end
+    
+    # Check Status
+    Num_S1Interface = GetRecordNum(strS1Interface,0)  
+    OK_Count = 0   
+    cn_num=0
+    for n in range (Num_S1Interface)
+        valueS1 = GetAttrValueByName(strS1Interface,0,"S1Interface state",n)
+        #Print(valuestate)
+        if valueS1 != 'Normal'
+            Print("NOK ... S1Interface ID "+ str(GetAttrValueByName(strS1Interface,0,"S1Interface ID",n))+" is "+str(GetAttrValueByName(strS1Interface,0,"S1Interface state",n))+" and S1 SCTP Link State is "+str(GetAttrValueByIdx(strS1Interface,0,6,n))+" and the CN Operator ID is "+str(GetAttrValueByIdx(strS1Interface,0,2,n)))
+            Mail_S1Interface += "NOK ... S1Interface ID "+ str(GetAttrValueByName(strS1Interface,0,"S1Interface ID",n))+" is "+str(GetAttrValueByName(strS1Interface,0,"S1Interface state",n))+" and S1 SCTP Link State is "+str(GetAttrValueByIdx(strS1Interface,0,6,n))+" and the CN Operator ID is "+str(GetAttrValueByIdx(strS1Interface,0,2,n))+"\n"        
+            OK_Count += 1
+        else
+            valueSCTP = GetAttrValueByIdx(strS1Interface,0,6,n)
+             if valueSCTP != 'Normal'
+                Print("NOK ... S1Interface ID "+ str(GetAttrValueByName(strS1Interface,0,"S1Interface ID",n))+" is "+str(GetAttrValueByName(strS1Interface,0,"S1Interface state",n))+" and S1 SCTP Link State is "+str(GetAttrValueByIdx(strS1Interface,0,6,n))+" and the CN Operator ID is "+str(GetAttrValueByIdx(strS1Interface,0,2,n)))
+                Mail_S1Interface += "NOK ... S1Interface ID "+ str(GetAttrValueByName(strS1Interface,0,"S1Interface ID",n))+" is "+str(GetAttrValueByName(strS1Interface,0,"S1Interface state",n))+" and S1 SCTP Link State is "+str(GetAttrValueByIdx(strS1Interface,0,6,n))+" and the CN Operator ID is "+str(GetAttrValueByIdx(strS1Interface,0,2,n))+"\n"
+                OK_Count += 1
+            else
+                Print("OK ... S1Interface ID "+ str(GetAttrValueByName(strS1Interface,0,"S1Interface ID",n))+" is "+str(GetAttrValueByName(strS1Interface,0,"S1Interface state",n))+" and S1 SCTP Link State is "+str(GetAttrValueByIdx(strS1Interface,0,6,n))+" and the CN Operator ID is "+str(GetAttrValueByIdx(strS1Interface,0,2,n)))
+                Mail_S1Interface += "OK ... S1Interface ID "+ str(GetAttrValueByName(strS1Interface,0,"S1Interface ID",n))+" is "+str(GetAttrValueByName(strS1Interface,0,"S1Interface state",n))+" and S1 SCTP Link State is "+str(GetAttrValueByIdx(strS1Interface,0,6,n))+" and the CN Operator ID is "+str(GetAttrValueByIdx(strS1Interface,0,2,n))+"\n"
+            end
+        end
+        
+        cn_value=str(GetAttrValueByIdx(strS1Interface,0,2,n))
+        
+        if cn_value=='0'
+            cn_num+=1
+        end
+    end
+    
+    if  OK_Count <= 0
+        dic.update({"S1 Interfaces":"OK"})
+    else
+        dic.update({"S1 Interfaces":"***** NOT OK *****"})
+    end 
+    
+    if  cn_num >= 5
+        dic.update({"Number VDF MME":"OK"})
+    else
+        dic.update({"Number VDF MME":"***** NOT OK *****"})
+    end 
+    
+    return Mail_S1Interface,Info_log
+end
+
+
+
+
+
+################ Check S1 Interfaces ################
+def Check_S1Interfaces_SRAN9()
+    
+    ClearMMLBuffer()
+    Mail_S1Interface = "\n    S1-MME interface state:\n"
+    @DSP S1INTERFACE:;
+    mml = GetMMLReport()
+    strS1Interface = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strS1Interface or GetResultCode(strS1Interface) != '0' 
+        Print('[ERROR]  FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strS1Interface), GetResultCause(strS1Interface))) 
+        Mail_S1Interface += "[ERROR]  FAILED Command Execution "+str(GetMMLCmd(strS1Interface))+"Reason: "+ str(GetResultCause(strS1Interface))+"\n"
+        dic.update({"S1 Interfaces":"ERROR"})
+        return Mail_S1Interface,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strS1Interface) < 1 
+        Print('[ERROR]  No proper entry information found')
+        Mail_S1Interface += '[ERROR]  No proper entry information found\n'
+        dic.update({"S1 Interfaces":"ERROR"})
+        return Mail_S1Interface,Info_log
+    end
+    
+    # Check Status
+    Num_S1Interface = GetRecordNum(strS1Interface,0)  
+    OK_Count = 0    
+    cn_num=0
+    for n in range (Num_S1Interface)
+        valueS1 = GetAttrValueByName(strS1Interface,0,"S1 Interface State",n)
+        #Print(valuestate)
+        if valueS1 != 'Normal'
+            Print("NOK ... S1 Interface ID "+ str(GetAttrValueByName(strS1Interface,0,"S1 Interface ID",n))+" is "+str(GetAttrValueByName(strS1Interface,0,"S1 Interface State",n))+" and S1 CP Bearer State is "+str(GetAttrValueByName(strS1Interface,0,"S1 CP Bearer State",n))+" and the CN Operator ID is "+str(GetAttrValueByIdx(strS1Interface,0,2,n)))
+            Mail_S1Interface += "NOK ... S1 Interface ID "+ str(GetAttrValueByName(strS1Interface,0,"S1 Interface ID",n))+" is "+str(GetAttrValueByName(strS1Interface,0,"S1 Interface State",n))+" and S1 CP Bearer State is "+str(GetAttrValueByName(strS1Interface,0,"S1 CP Bearer State",n))+" and the CN Operator ID is "+str(GetAttrValueByIdx(strS1Interface,0,2,n))+"\n"        
+            OK_Count += 1
+        else
+            valueSCTP = GetAttrValueByName(strS1Interface,0,"S1 CP Bearer State",n)
+             if valueSCTP != 'Normal'
+                Print("NOK ... S1 Interface ID "+ str(GetAttrValueByName(strS1Interface,0,"S1 Interface ID",n))+" is "+str(GetAttrValueByName(strS1Interface,0,"S1 Interface State",n))+" and S1 CP Bearer State is "+str(GetAttrValueByName(strS1Interface,0,"S1 CP Bearer State",n))+" and the CN Operator ID is "+str(GetAttrValueByIdx(strS1Interface,0,2,n)))
+                Mail_S1Interface += "NOK ... S1 Interface ID "+ str(GetAttrValueByName(strS1Interface,0,"S1 Interface ID",n))+" is "+str(GetAttrValueByName(strS1Interface,0,"S1 Interface State",n))+" and S1 CP Bearer State is "+str(GetAttrValueByName(strS1Interface,0,"S1 CP Bearer State",n))+" and the CN Operator ID is "+str(GetAttrValueByIdx(strS1Interface,0,2,n))+"\n"
+                OK_Count += 1
+            else
+                Print("OK ... S1 Interface ID "+ str(GetAttrValueByName(strS1Interface,0,"S1 Interface ID",n))+" is "+str(GetAttrValueByName(strS1Interface,0,"S1 Interface State",n))+" and S1 SCTP Link State is "+str(GetAttrValueByName(strS1Interface,0,"S1 CP Bearer State",n))+" and the CN Operator ID is "+str(GetAttrValueByIdx(strS1Interface,0,2,n)))
+                Mail_S1Interface += "OK ... S1 Interface ID "+ str(GetAttrValueByName(strS1Interface,0,"S1 Interface ID",n))+" is "+str(GetAttrValueByName(strS1Interface,0,"S1 Interface State",n))+" and S1 CP Bearer State is "+str(GetAttrValueByName(strS1Interface,0,"S1 CP Bearer State",n))+" and the CN Operator ID is "+str(GetAttrValueByIdx(strS1Interface,0,2,n))+"\n"
+            end
+        end
+        
+        cn_value=str(GetAttrValueByIdx(strS1Interface,0,2,n))
+        
+        if cn_value=='0'
+            cn_num+=1
+        end
+    end
+    
+    if  OK_Count <= 0
+        dic.update({"S1 Interfaces":"OK"})
+    else
+        dic.update({"S1 Interfaces":"***** NOT OK *****"})
+    end 
+    
+    if  cn_num >= 5
+        dic.update({"Number VDF MME":"OK"})
+    else
+        dic.update({"Number VDF MME":"***** NOT OK *****"})
+    end 
+    
+    return Mail_S1Interface,Info_log
+end
+
+################ Check Neighbours Relations with E-UTRAN Cell Intra-Frequency: ################
+def Check_NeighboursEUTRAN_Intra()
+    
+    ClearMMLBuffer()
+    Mail_NeighboursEUTRAN_Intra = ""
+    @LST EUTRANINTRAFREQNCELL:;
+    mml = GetMMLReport()
+    strNeighboursEUTRAN_Intra = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    OK_Count = 1
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strNeighboursEUTRAN_Intra or GetResultCode(strNeighboursEUTRAN_Intra) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strNeighboursEUTRAN_Intra), GetResultCause(strNeighboursEUTRAN_Intra))) 
+        Mail_NeighboursEUTRAN_Intra += "[ERROR] FAILED Command Execution " +str(GetMMLCmd(strNeighboursEUTRAN_Intra))+"Reason: "+ str(GetResultCause(strNeighboursEUTRAN_Intra))+"\n"
+        return Mail_NeighboursEUTRAN_Intra,Info_log,OK_Count
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strNeighboursEUTRAN_Intra) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_NeighboursEUTRAN_Intra += '[ERROR] No proper entry information found\n'
+        return Mail_NeighboursEUTRAN_Intra,Info_log,OK_Count
+    end
+    
+    # Check Status
+    OK_Count = 0
+    Num_NeighboursEUTRAN_Intra = GetRecordNum(strNeighboursEUTRAN_Intra,0)
+    if Num_NeighboursEUTRAN_Intra <= 0
+        Print("NOK ... Intra-Frequency Neighbouring Relation with E-UTRAN Cell: " +str(GetRecordNum(strNeighboursEUTRAN_Intra,0)))
+        Mail_NeighboursEUTRAN_Intra += "NOK ... Intra-Frequency Neighbouring Relation with E-UTRAN Cell: "+str(GetRecordNum(strNeighboursEUTRAN_Intra,0))+"\n"
+        OK_Count += 1
+    else
+        Print("OK ... Intra-Frequency Neighbouring Relation with E-UTRAN Cell: " +str(GetRecordNum(strNeighboursEUTRAN_Intra,0)))
+        Mail_NeighboursEUTRAN_Intra += "OK ... Intra-Frequency Neighbouring Relation with E-UTRAN Cell: "+str(GetRecordNum(strNeighboursEUTRAN_Intra,0))+"\n"
+    end
+    
+    return Mail_NeighboursEUTRAN_Intra,Info_log,OK_Count
+end
+
+################ Check Neighbours Relations with E-UTRAN Cell Inter-Frequency: ################
+def Check_NeighboursEUTRAN_Inter()
+
+    ClearMMLBuffer()
+    Mail_NeighboursEUTRAN_Inter = ""
+    @LST EUTRANINTERFREQNCELL:;
+    mml = GetMMLReport()
+    strNeighboursEUTRAN_Inter = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    OK_Count = 1
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strNeighboursEUTRAN_Inter or GetResultCode(strNeighboursEUTRAN_Inter) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strNeighboursEUTRAN_Inter), GetResultCause(strNeighboursEUTRAN_Inter))) 
+        Mail_NeighboursEUTRAN_Inter += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strNeighboursEUTRAN_Inter))+"Reason: "+ str(GetResultCause(strNeighboursEUTRAN_Inter))+"\n"
+        return Mail_NeighboursEUTRAN_Inter,Info_log,OK_Count
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strNeighboursEUTRAN_Inter) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_NeighboursEUTRAN_Inter += '[ERROR] No proper entry information found\n'
+        return Mail_NeighboursEUTRAN_Inter,Info_log,OK_Count
+    end
+    
+    # Check Status
+    Num_NeighboursEUTRAN_Inter = GetRecordNum(strNeighboursEUTRAN_Inter,0)
+    if Num_NeighboursEUTRAN_Inter <= 0
+        Print("NOK ... Inter-Frequency Neighbouring Relation with E-UTRAN Cell: " +str(GetRecordNum(strNeighboursEUTRAN_Inter,0)))
+        Mail_NeighboursEUTRAN_Inter += "NOK ... Inter-Frequency Neighbouring Relation with E-UTRAN Cell: "+str(GetRecordNum(strNeighboursEUTRAN_Inter,0))+"\n"
+        OK_Count +=1
+    else
+        Print("OK ... Inter-Frequency Neighbouring Relation with E-UTRAN Cell: " +str(GetRecordNum(strNeighboursEUTRAN_Inter,0)))
+        Mail_NeighboursEUTRAN_Inter += "OK ... Inter-Frequency Neighbouring Relation with E-UTRAN Cell: "+str(GetRecordNum(strNeighboursEUTRAN_Inter,0))+"\n"
+    end
+    
+    return Mail_NeighboursEUTRAN_Inter,Info_log,OK_Count
+end
+
+################ Check Neighbours Relations with UTRAN Cell ################
+def Check_NeighboursUTRAN()
+    
+    ClearMMLBuffer()
+    Mail_NeighbourUTRAN = ""
+    @LST UTRANNCELL:;
+    mml = GetMMLReport()
+    strNeighbourUTRAN = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    OK_Count = 1
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strNeighbourUTRAN or GetResultCode(strNeighbourUTRAN) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strNeighbourUTRAN), GetResultCause(strNeighbourUTRAN))) 
+        Mail_NeighbourUTRAN += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strNeighbourUTRAN))+"Reason: "+ str(GetResultCause(strNeighbourUTRAN))+"\n"
+        return Mail_NeighbourUTRAN,Info_log,OK_Count
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strNeighbourUTRAN) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_NeighbourUTRAN += '[ERROR] No proper entry information found\n'
+        return Mail_NeighbourUTRAN,Info_log,OK_Count
+    end
+    
+    # Check Status
+    OK_Count = 0
+    Num_NeighbourUTRAN = GetRecordNum(strNeighbourUTRAN,0)
+    if Num_NeighbourUTRAN <= 0
+        Print("NOK ... Neighbouring Relation with UTRAN Cell: " +str(GetRecordNum(strNeighbourUTRAN,0)))
+        Mail_NeighbourUTRAN += "NOK ... Neighbouring Relation with UTRAN Cell: "+str(GetRecordNum(strNeighbourUTRAN,0))+"\n"
+        OK_Count + 1
+    else
+        Print("OK ... Neighbouring Relation with UTRAN Cell: " +str(GetRecordNum(strNeighbourUTRAN,0)))
+        Mail_NeighbourUTRAN += "OK ... Neighbouring Relation with UTRAN Cell: "+str(GetRecordNum(strNeighbourUTRAN,0))+"\n"
+    end
+    
+    return Mail_NeighbourUTRAN,Info_log,OK_Count
+end
+
+################ Check Neighbours Relations with GERAN Cell: ################
+def Check_NeighboursGERAN()
+    
+    ClearMMLBuffer()
+    Mail_NeighbourGERAN = ""
+    @LST GERANNCELL:;
+    mml = GetMMLReport()
+    strNeighbourGERAN = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    OK_Count = 1
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strNeighbourGERAN or GetResultCode(strNeighbourGERAN) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strNeighbourGERAN), GetResultCause(strNeighbourGERAN))) 
+        Mail_NeighbourGERAN += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strNeighbourGERAN))+"Reason: "+ str(GetResultCause(strNeighbourGERAN))+"\n"
+        return Mail_NeighbourGERAN,Info_log,OK_Count
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strNeighbourGERAN) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_NeighbourGERAN += '[ERROR] No proper entry information found\n'
+        return Mail_NeighbourGERAN,Info_log,OK_Count
+    end
+    
+    # Check Status
+    OK_Count = 0
+    Num_NeighbourGERAN = GetRecordNum(strNeighbourGERAN,0)
+    if Num_NeighbourGERAN <= 0
+        Print("NOK ... Neighbouring Relation with GERAN Cell: " +str(GetRecordNum(strNeighbourGERAN,0)))
+        Mail_NeighbourGERAN += "NOK ... Neighbouring Relation with GERAN Cell: "+str(GetRecordNum(strNeighbourGERAN,0))+"\n"
+        OK_Count += 1
+    else
+        Print("OK ... Neighbouring Relation with GERAN Cell: " +str(GetRecordNum(strNeighbourGERAN,0)))
+        Mail_NeighbourGERAN += "OK ... Neighbouring Relation with GERAN Cell: "+str(GetRecordNum(strNeighbourGERAN,0))+"\n"
+    end
+    
+    return Mail_NeighbourGERAN,Info_log,OK_Count
+end
+
+################ Check Neighbours Relations: ################
+def Check_Neighbours()
+
+    Mail_Neighbour = "\n    Neighbour Relation Check:\n"
+    Intra,Info_Intra,OK_Intra = Check_NeighboursEUTRAN_Intra()
+    Inter,Info_Inter,OK_Inter = Check_NeighboursEUTRAN_Inter()
+    N3G,Info_N3G,OK_N3G = Check_NeighboursUTRAN()
+    N2G,Info_N2G,OK_N2G = Check_NeighboursGERAN()
+    Mail_Neighbour += str(Intra)+str(Inter)+str(N3G)+str(N2G)
+    
+    Info_log = Info_Intra + Info_Inter + Info_N3G + Info_N2G 
+    OK_Count = OK_Intra + OK_Inter + OK_N3G + OK_N2G 
+    
+    if  OK_Count <= 0
+        dic.update({"Neighbours Relations":"OK"})
+    elif OK_Inter > 0
+        dic.update({"Neighbours Relations":"OK (LTE Inter)"})
+    else
+        dic.update({"Neighbours Relations":"***** NOT OK *****"})
+    end   
+    
+    return Mail_Neighbour,Info_log
+end
+
+################ Check S1-U Interface State ################ 
+def Check_IP(IPPath)
+
+    ClearMMLBuffer()
+    Mail_IP = ""
+    CMD = ("DSP IPPATH:PATHID="+str(IPPath)+";")
+    #Print (CMD)
+    SendMML(CMD)
+    #@STR RFTEST:TSTTYPE=PIMOFFLINE,CN=0,SRN=5,SN=2;
+    mml = GetMMLReport(-1)
+    #Print(mml)
+    strIP = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    OK_Count = 1
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strIP or GetResultCode(strIP) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strIP), GetResultCause(strIP)) ) 
+        Mail_IP += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strIP))+"Reason: "+ str(GetResultCause(strIP))
+        return Mail_IP,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strIP) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_IP += '[ERROR] No proper entry information found\n'      
+        return Mail_IP,Info_log
+    end
+    
+    # Check Status  
+    OK_Count = 0
+    value_IP = GetAttrValueByName(strIP,0,"IP Path Check Result",0)
+    if value_IP == 'Normal'
+        Print("OK ... IP Path ID "+str(IPPath)+": IP Path Check is "+str(GetAttrValueByName(strIP,0,"IP Path Check Result",0)))
+        Mail_IP += "OK ... IP Path ID "+str(IPPath)+": IP Path Check is "+str(GetAttrValueByName(strIP,0,"IP Path Check Result",0))
+    else
+        Print("NOK ... IP Path ID "+str(IPPath)+": Not possible to check due to "+str(GetAttrValueByName(strIP,0,"IP Path Check Result",0)))
+        Mail_IP += "NOK ... IP Path ID "+str(IPPath)+": Not possible to check due to "+str(GetAttrValueByName(strIP,0,"IP Path Check Result",0))
+        OK_Count += 1
+    end
+
+    
+    
+    
+    return Mail_IP,Info_log,OK_Count
+end
+
+################ Check S1-U Interface State (IPPath) ################ 
+def Check_IPPath()
+
+    ClearMMLBuffer()
+    Mail_IPPath = "\n    S1-U interface state\n"
+    @LST CNOPERATORIPPATH:;
+    mml = GetMMLReport()
+    strIPPath = ParseMMLRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strIPPath or GetResultCode(strIPPath) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetMMLCmd(strIPPath), GetResultCause(strIPPath))) 
+        Mail_IPPath += "[ERROR] FAILED Command Execution "+str(GetMMLCmd(strIPPath))+"Reason: "+ str(GetResultCause(strIPPath))
+        dic.update({"IP Path":"ERROR"})
+        return Mail_IPPath,Info_log
+    end
+    
+    # If MML report has no corresponding entry information, the system prompts error and does not continue processing  
+    if GetObjNum(strIPPath) < 1 
+        Print('[ERROR] No proper entry information found')
+        Mail_IPPath += '[ERROR] No proper entry information found\n'
+        dic.update({"IP Path":"ERROR"})
+        return Mail_IPPath,Info_log 
+    end
+    
+    # Check Status
+    Num_IPPath = GetRecordNum(strIPPath,0)   
+    OK_Count = 0
+    for o in range (Num_IPPath)
+        IPPath = str(GetAttrValueByIdx(strIPPath,0,0,o)) #IP Path ID
+        Mail_IP,Info_IP,OK_IP = Check_IP(IPPath)
+        Mail_IPPath += Mail_IP+"\n"
+        OK_Count += int(OK_IP)
+        Info_log += str(Info_IP)
+    end
+    
+    if  OK_Count <= 0
+        dic.update({"IP Path":"OK"})
+    else
+        dic.update({"IP Path":"NOT OK"})
+    end 
+    
+    return Mail_IPPath,Info_log
+end   
+
+
+
+
+################ Check Active Alarms After Tests ################
+def Check_Alarms_After(NEName)
+
+    ClearMMLBuffer()
+    Mail_Alarms = "\n    Active Alarms After Tests:\n"
+    @LST ALMAF:;
+    mml = GetMMLReport()
+    strAlarm = ParseAlmRpt(mml)
+    Info_log = str(mml)
+    
+    # If MML command does not execute successfully, the system prompts error and does not continue processing  
+    if not strAlarm or GetAlmResultCode(strAlarm) != '0' 
+        Print('[ERROR] FAILED Command Execution %s. Reason: %s' %(GetAlmMMLCmd(strAlarm), GetAlmResultCause(strAlarm)) ) 
+        Mail_Alarms += "[ERROR] FAILED Command Execution "+str(GetAlmMMLCmd(strAlarm))+"Reason: "+ str(GetAlmResultCause(strAlarm))+"\n"
+        dic.update({'Active Alarms After Tests':'ERROR'})
+        return Mail_Alarms,Info_log
+    end
+    
+    OK_Count = 0 
+    if GetAlmRptNum(strAlarm) <= 0
+        Print("OK ... No Active Alarms After Tests in %s" %NEName)
+        Mail_Alarms += ("OK ... No Active Alarms After Tests in %s" %NEName)+"\n"
+    else   
+        Print("NOK ... ACTIVE ALARMS After Tests in %s" %NEName)
+        Mail_Alarms += ("NOK ... ACTIVE ALARMS After Tests in %s" %NEName)+"\n"
+		alarm_print, alarm_filter = Print_Alarms(strAlarm)
+        Mail_Alarms += alarm_print
+        OK_Count += 1
+    end
+    
+    if  OK_Count <= 0
+        dic.update({"Active Alarms After Tests":"OK"})
+	elif alarm_filter != "" 
+        dic.update({"Active Alarms After Tests":"***** NOT OK *****"})
+    elif alarm_filter == ""
+        dic.update({"Active Alarms After Tests":"NOT OK"})
+    end    
+    
+    return Mail_Alarms,Info_log
+end
+
+
+
+
+
+
+def ExecMMLCmd(NEName,Site_name)
+    # Send MML command to NE to obtain messages. Being restricted by the running environment, we use constant instead.      
+    if NEName != Site_name
+        ConnectNE(Site_name)
+    else
+        ConnectNE(NEName)
+    end
+    Sleep(3)
+    
+    ################ Check Maintenance Mode 
+    Mail_MntMode,Info_Log_MntMode = Check_MmtMode()  
+    # Mail_MntMode="\nCheck Maintenance Mode - Function Commented\n" 
+    # Info_Log_MntMode ="\nCheck Maintenance Mode - Function Commented\n"
+    # dic.update({'Maintenance Mode':'Function Commented'})
+    
+    ################ Check if there are active Alarms
+    Mail_Alarms,Info_Log_Alarms = Check_Alarms(NEName)   
+    # Mail_Alarms="\nCheck Active Alarms - Function Commented\n" 
+    # Info_Log_Alarms ="\nCheck Active Alarms - Function Commented\n"
+    # dic.update({'Active Alarms':'Function Commented'})
+    
+    ################ Check Alarms Log
+    Mail_Alarms_Log,Info_Log_Alarms_Log = Check_Alarms_Log(NEName)   
+    # Mail_Alarms_Log="\nCheck Active Alarms - Function Commented\n" 
+    # dic.update({'Alarms Log':'Function Commented'})
+    # dic.update({'Alarms Log_10days':'Function Commented'})
+    # Info_Log_Alarms_Log ="\nCheck Alarms Log - Function Commented\n"
+    
+    ################ Check Software Version
+    Mail_SW,Info_Log_SW = Check_SW()
+    # Mail_SW="\nCheck Software Version - Function Commented\n"  
+    # Info_Log_SW ="\nCheck Software Version  - Function Commented\n"
+    # dic.update({'Software Version':'Function Commented'})
+    
+    
+    if "R010" in str(dic['SW_Version'])
+        ################ Check Licenses SRAN10
+        Mail_License,Info_Log_License = Check_Licenses_SRAN10() 
+        # Mail_License="\nCheck Licenses - Function Commented\n" 
+        # Info_Log_License ="\nCheck Licenses  - Function Commented\n"
+        # dic.update({'Licenses':'Function Commented'})
+        
+            ################ Check S1 Interfaces SRAN9
+            Mail_S1Interface,Info_Log_S1Interface = Check_S1Interfaces_SRAN9()
+            # Mail_S1Interface="\nCheck S1 Interfaces - Function Commented\n"    
+            # Info_Log_S1Interface="\nCheck S1 Interfaces - Function Commented\n"
+            # dic.update({'S1 Interfaces':'Function Commented'})
+            # dic.update({'Number VDF MME':'Function Commented'})
+    
+        
+        ################ Check Cell State SRAN10
+        Mail_Cell,Info_Log_Cell = Check_CellState_SRAN10()  
+        # Mail_Cell="\nCheck Cell State    - Function Commented\n" 
+        # Info_Log_Cell ="\nCheck Cell State - Function Commented\n"
+        # dic.update({'Cells Status':'Function Commented'})
+        # dic.update({"Cells by Operator":'Function Commented'})
+        
+            ################ Check VSWR SRAN9 
+            # Mail_VSWR,Info_Log_VSWR = Check_VSWR_SRAN9()     
+            Mail_VSWR,Info_Log_VSWR = Check_DSP_VSWR() # No Test Just Display
+            # Mail_VSWR="\nCheck VSWR - Function Commented\n" 
+            # Info_Log_VSWR ="\nCheck VSWR - Function Commented\n"
+            # dic.update({'VSWR':'Function Commented'})
+            
+            Sleep(15)
+
+            ################ Check RF Interference
+            # Mail_Board,Info_Log_Board = Check_Board_SRAN9()
+            Mail_Board="\nCheck RF Interference - Function Commented\n"  
+            Info_Log_Board ="\nCheck RF Interference - Function Commented\n"
+            dic.update({'PIM Test':'Function Commented'})
+    
+    elif "R012" or "R015" in str(dic['SW_Version'])
+        ################ Check Licenses
+        Mail_License,Info_Log_License = Check_Licenses_SRAN10() 
+        # Mail_License="\nCheck Licenses - Function Commented\n" 
+        # Info_Log_License ="\nCheck Licenses  - Function Commented\n"
+        # dic.update({'Licenses':'Function Commented'})
+        
+        ################ Check S1 Interfaces SRAN9
+        Mail_S1Interface,Info_Log_S1Interface = Check_S1Interfaces_SRAN9()
+        # Mail_S1Interface="\nCheck S1 Interfaces - Function Commented\n"    
+        # Info_Log_S1Interface="\nCheck S1 Interfaces - Function Commented\n"
+        # dic.update({'S1 Interfaces':'Function Commented'})
+        # dic.update({'Number VDF MME':'Function Commented'})
+    
+        ################ Check Cell State SRAN11 
+        Mail_Cell,Info_Log_Cell = Check_CellState_SRAN12()  
+        # Mail_Cell="\nCheck Cell State    - Function Commented\n" 
+        # Info_Log_Cell ="\nCheck Cell State - Function Commented\n"
+        # dic.update({'Cells Status':'Function Commented'})
+        # dic.update({"Cells by Operator":'Function Commented'})
+        
+        ################ Check VSWR SRAN9 
+        # Mail_VSWR,Info_Log_VSWR = Check_VSWR_SRAN9()     
+        Mail_VSWR,Info_Log_VSWR = Check_DSP_VSWR() # No Test Just Display
+        # Mail_VSWR="\nCheck VSWR - Function Commented\n" 
+        # Info_Log_VSWR ="\nCheck VSWR - Function Commented\n"
+        # dic.update({'VSWR':'Function Commented'})
+        
+        Sleep(15)
+
+        ################ Check RF Interference
+        # Mail_Board,Info_Log_Board = Check_Board_SRAN9()
+        Mail_Board="\nCheck RF Interference - Function Commented\n"  
+        Info_Log_Board ="\nCheck RF Interference - Function Commented\n"
+        dic.update({'PIM Test':'Function Commented'})
+
+    elif "R011" in str(dic['SW_Version'])
+        ################ Check Licenses
+        Mail_License,Info_Log_License = Check_Licenses_SRAN10() 
+        # Mail_License="\nCheck Licenses - Function Commented\n" 
+        # Info_Log_License ="\nCheck Licenses  - Function Commented\n"
+        # dic.update({'Licenses':'Function Commented'})
+        
+        ################ Check S1 Interfaces SRAN9
+        Mail_S1Interface,Info_Log_S1Interface = Check_S1Interfaces_SRAN9()
+        # Mail_S1Interface="\nCheck S1 Interfaces - Function Commented\n"    
+        # Info_Log_S1Interface="\nCheck S1 Interfaces - Function Commented\n"
+        # dic.update({'S1 Interfaces':'Function Commented'})
+        # dic.update({'Number VDF MME':'Function Commented'})
+    
+        ################ Check Cell State SRAN11 
+        Mail_Cell,Info_Log_Cell = Check_CellState_SRAN11()  
+        # Mail_Cell="\nCheck Cell State    - Function Commented\n" 
+        # Info_Log_Cell ="\nCheck Cell State - Function Commented\n"
+        # dic.update({'Cells Status':'Function Commented'})
+        # dic.update({"Cells by Operator":'Function Commented'})
+        
+        ################ Check VSWR SRAN9 
+        # Mail_VSWR,Info_Log_VSWR = Check_VSWR_SRAN9()     
+        Mail_VSWR,Info_Log_VSWR = Check_DSP_VSWR() # No Test Just Display
+        # Mail_VSWR="\nCheck VSWR - Function Commented\n" 
+        # Info_Log_VSWR ="\nCheck VSWR - Function Commented\n"
+        # dic.update({'VSWR':'Function Commented'})
+        
+        Sleep(15)
+
+        ################ Check RF Interference
+        # Mail_Board,Info_Log_Board = Check_Board_SRAN9()
+        Mail_Board="\nCheck RF Interference - Function Commented\n"  
+        Info_Log_Board ="\nCheck RF Interference - Function Commented\n"
+        dic.update({'PIM Test':'Function Commented'})
+            
+    elif "R009" in str(dic['SW_Version'])
+        ################ Check Licenses
+        Mail_License,Info_Log_License = Check_Licenses_SRAN9() 
+        # Mail_License="\nCheck Licenses - Function Commented\n" 
+        # Info_Log_License ="\nCheck Licenses  - Function Commented\n"
+        # dic.update({'Licenses':'Function Commented'})
+        
+        ################ Check S1 Interfaces SRAN9
+        Mail_S1Interface,Info_Log_S1Interface = Check_S1Interfaces_SRAN9()
+        # Mail_S1Interface="\nCheck S1 Interfaces - Function Commented\n"    
+        # Info_Log_S1Interface="\nCheck S1 Interfaces - Function Commented\n"
+        # dic.update({'S1 Interfaces':'Function Commented'})
+        # dic.update({'Number VDF MME':'Function Commented'})
+    
+        ################ Check Cell State SRAN9  
+        Mail_Cell,Info_Log_Cell = Check_CellState_SRAN9()  
+        # Mail_Cell="\nCheck Cell State    - Function Commented\n" 
+        # Info_Log_Cell ="\nCheck Cell State - Function Commented\n"
+        # dic.update({'Cells Status':'Function Commented'})
+        # dic.update({"Cells by Operator":'Function Commented'})
+        
+        ################ Check VSWR SRAN9 
+        # Mail_VSWR,Info_Log_VSWR = Check_VSWR_SRAN9()     
+        Mail_VSWR,Info_Log_VSWR = Check_DSP_VSWR() # No Test Just Display
+        # Mail_VSWR="\nCheck VSWR - Function Commented\n" 
+        # Info_Log_VSWR ="\nCheck VSWR - Function Commented\n"
+        # dic.update({'VSWR':'Function Commented'})
+        
+        Sleep(15)
+
+        ################ Check RF Interference
+        # Mail_Board,Info_Log_Board = Check_Board_SRAN9()
+        Mail_Board="\nCheck RF Interference - Function Commented\n"  
+        Info_Log_Board ="\nCheck RF Interference - Function Commented\n"
+        dic.update({'PIM Test':'Function Commented'})
+        
+    elif "R" in str(dic['SW_Version'])
+        ################ Check Licenses
+        Mail_License,Info_Log_License = Check_Licenses() 
+        # Mail_License="\nCheck Licenses - Function Commented\n" 
+        # Info_Log_License ="\nCheck Licenses  - Function Commented\n"
+        # dic.update({'Licenses':'Function Commented'})
+        
+        ################ Check S1 Interfaces
+        Mail_S1Interface,Info_Log_S1Interface = Check_S1Interfaces()
+        # Mail_S1Interface="\nCheck S1 Interfaces - Function Commented\n"    
+        # Info_Log_S1Interface="\nCheck S1 Interfaces - Function Commented\n"
+        # dic.update({'S1 Interfaces':'Function Commented'})
+        # dic.update({'Number VDF MME':'Function Commented'})
+        
+        ################ Check Cell State   
+        Mail_Cell,Info_Log_Cell = Check_CellState()  
+        # Mail_Cell="\nCheck Cell State    - Function Commented\n" 
+        # Info_Log_Cell ="\nCheck Cell State - Function Commented\n"
+        # dic.update({'Cells Status':'Function Commented'})
+        # dic.update({"Cells by Operator":'Function Commented'})
+        
+        ################ Check VSWR 
+        # Mail_VSWR,Info_Log_VSWR = Check_VSWR()     
+        Mail_VSWR,Info_Log_VSWR = Check_DSP_VSWR() # No Test Just Display
+        # Mail_VSWR="\nCheck VSWR - Function Commented\n" 
+        # Info_Log_VSWR ="\nCheck VSWR - Function Commented\n"
+        # dic.update({'VSWR':'Function Commented'})
+        
+        Sleep(15)
+
+        ################ Check RF Interference
+        # Mail_Board,Info_Log_Board = Check_Board()
+        Mail_Board="\nCheck RF Interference - Function Commented\n"  
+        Info_Log_Board ="\nCheck RF Interference - Function Commented\n"
+        dic.update({'PIM Test':'Function Commented'})
+    else
+        ################ Check Licenses
+        Mail_License="\nCheck Licenses - Unable to confirm SW Version\n"   
+        Info_Log_License="\nCheck Licenses - Unable to confirm SW Version\n"   
+        dic.update({"Licenses":"Unable to confirm SW Version"})
+        
+        ################ Check S1 Interfaces
+        Mail_S1Interface="\nCheck S1 Interfaces - Unable to confirm SW Version\n"    
+        Info_Log_S1Interface="\nCheck S1 Interfaces - Unable to confirm SW Version\n"
+        dic.update({'S1 Interfaces':'Unable to confirm SW Version'})
+        dic.update({'Number VDF MME':'Unable to confirm SW Version'})
+    
+        ################ Check Cell State   
+        Mail_Cell="\nCheck Cell State    - Unable to confirm SW Version\n" 
+        Info_Log_Cell ="\nCheck Cell State - Unable to confirm SW Version\n"
+        dic.update({"Cells Status":"Unable to confirm SW Version"})
+        dic.update({"Cells by Operator":"Unable to confirm SW Version"})
+        
+        ################ Check VSWR 
+        Mail_VSWR="\nCheck VSWR - Unable to confirm SW Version\n" 
+        Info_Log_VSWR ="\nCheck VSWR - Unable to confirm SW Version\n"
+        dic.update({'VSWR':'Unable to confirm SW Version'})
+
+        ################ Check RF Interference
+        Mail_Board="\nCheck RF Interference - Unable to confirm SW Version\n"  
+        Info_Log_Board ="\nCheck RF Interference - Unable to confirm SW Version\n"
+        dic.update({'PIM Test':'Unable to confirm SW Version'})
+    end
+    
+
+    
+   
+    
+    ################ Check S1-U Interface State
+    Mail_IPPath,Info_Log_IPPath = Check_IPPath()
+    # Mail_IPPath="\nCheck S1-U Interface State - Function Commented\n"  
+    # Info_Log_IPPath="\nCheck S1-U Interface State - Function Commented\n"
+    # dic.update({'IP Path':'Function Commented'})    
+    
+    ################ Check Neighbours Relations
+    Mail_Neighbour,Info_Log_Neighbour = Check_Neighbours()
+    # Mail_Neighbour="\nCheck Neighbours Relations - Function Commented\n"   
+    # Info_Log_Neighbour ="\nCheck Neighbours Relations - Function Commented\n"
+    # dic.update({'Neighbours Relations':'Function Commented'})
+    
+    
+    Sleep(10)
+    
+    ################ Check if there are active Alarms After Tests
+    Mail_Alarms_After,Info_Log_Alarms_After = Check_Alarms_After(NEName)   
+    # Mail_Alarms_After="\nCheck Active Alarms After Tests - Function Commented\n" 
+    # Info_Log_Alarms_After ="\nCheck Active Alarms After Tests - Function Commented\n"
+    # dic.update({'Active Alarms After Tests':'Function Commented'})
+    
+    Info_Log=Info_Log_MntMode+Info_Log_Alarms+Info_Log_Alarms_Log+Info_Log_License+Info_Log_SW+Info_Log_Cell+Info_Log_S1Interface+Info_Log_IPPath+Info_Log_Neighbour+Info_Log_VSWR+Info_Log_Board+Info_Log_Alarms_After
+    dic.update({'Log':Info_Log})
+    
+    return Mail_MntMode,Mail_Alarms,Mail_Alarms_Log,Mail_License,Mail_SW,Mail_Cell,Mail_S1Interface,Mail_IPPath,Mail_Neighbour,Mail_VSWR,Mail_Board,Mail_Alarms_After
+end
+
+################ Get list with full name of the NE ################
+def Get_ElementList(ElementListfull,Element)
+    
+    # NE_List=GetNELstByType("BTS3900L LTE")    #BTS3900L LTE & BTS3900AL LTE
+    
+    Element_LTE=[]
+
+    for i in ElementListfull
+        if Element in i
+            #Print (i)
+            Element_LTE.append(i)
+        end
+    end
+    #Print(Element_LTE)
+    
+    
+    return Element_LTE
+end
+
+
+
+################ Get list with full name of the NE ################
+def Get_ElementListfull()
+    
+    # NE_List=GetNELstByType("BTS3900L LTE")    #BTS3900L LTE & BTS3900AL LTE
+    NE_List=GetNELst()
+
+    Element_List=[]
+    for j in NE_List
+        if 'V' in j
+            #Print (j)
+            Element_List.append(j)
+        end
+    end
+    #Print(Element_List)
+    return Element_List
+end
+
+
+
+####################################--Function definition-end--####################################
+
+####################################--Program execution-begin--####################################
+##GET SRAN LIST
+neListall = GetNELst()
+#Print(neListall)
+Element_CoMPT=[]
+ElementListfull=Get_ElementListfull()
+for j in neListall
+        if 'SRAN' in j
+            #Print (j)
+            Element_CoMPT.append(j)
+        end
+end
+# Print(Element_CoMPT)
+
+for Element in NE_Name
+    Site_name=Element
+    Site_name2 = []
+    Element_LTE = Get_ElementList(ElementListfull,Element)
+    Print(str(Element))
+    Print (str(Element_LTE))
+        if Element_LTE == []
+            suck=ConnectNE(Site_name)
+            ## fazer mml 4G
+            if suck != 1
+                ## if se ok quer dizer que o site name é igual ao elemte_LTE se não correr a verificação SRAN e por o site_name = ao element
+                NE_Num =  ''.join([j for j in Element if j.isdigit()]) 
+                NE_Num = NE_Num[-5:]
+                ##Print(str(Element)+"-"+str(NE_Num))
+                for k in Element_CoMPT
+                   if NE_Num in k
+                       #Print (k)
+                       Site_name2.append(k)
+                    end
+                end
+                Print(Site_name2)
+                            
+                for site in Site_name2
+                    xpto=ConnectNE(site)
+                    # Sleep(2)
+                
+                    ClearMMLBuffer()
+                    xpto=SendMML("LST ENODEBFUNCTION:;")
+                    Print(str(xpto))
+                    mml = GetMMLReport()
+                    strnode = ParseMMLRpt(mml)
+                    value_node = GetAttrValueByName(strnode,0,"eNodeB Function Name",0)
+                    
+                    Print("dentro="+str(value_node))
+                    Print("dentro="+str(Site_name))
+                    if str(value_node) == str(Site_name)
+                        Site_name=site
+                    end            
+                end
+                
+                if str(Site_name) == str(Element)
+                    Site_name=[]
+                end        
+                
+                Element_LTE = [Element]
+            end
+            
+        end
+
+    for NEName in Element_LTE
+        Print(NEName)
+        Print(Site_name)
+        if Site_name != [] and NE_Name != []
+            Main(NEName,Site_name)
+        end
+    end
+    
+end
+
+###############################Parte Gráfica
+
+            #Print("Begin to test User Control.........")
+
+#formhandle1 = CreateForm(" Welcome to Beacon Acceptance",["next"])
+
+#labelHandle = Label(formhandle1,500, " Please enter site, then you can enter next step")
+
+#hEnter = Enter(formhandle1)
+
+#Label(formhandle1,150, " Please enter site:")
+
+#hEdit2 = Edit(formhandle1, 100)
+            #Print(GetValue(hEdit2))
+#Enter(formhandle1)
+            #cb11 = CheckBox(formhandle1, 100, "checkbox")
+
+#Enter(formhandle1)
+            #NeTree(formhandle1, 20,20,1)
+#strFormTitle = ShowForm(formhandle1)
+#strName = GetValue(hEdit2)
+#NEName =strName
+#Print(GetValue(hEdit2))
+            #Print(GetValue(cb11))
+
+
+#if strFormTitle == "next"
+#str1 = "12345"
+#fp.write(str1)
+
+
+
+#    result=ExecMMLCmd()
+
+   
+#end
+
+      
+    
+    
+    
+  
+
+#DeleteForm(formhandle1)
+
+
+

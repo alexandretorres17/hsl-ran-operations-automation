@@ -1,0 +1,71 @@
+# #encoding=utf-8
+# #encoding=utf-8
+# Print(GetPmNeType('BTS3900'))
+# funList=GetFuncSetList(GetNETypeIDByName('BTS3900'))
+# Print(funList)
+# resList = GetFunctionSubSetList('BTS3900')
+# Print(resList)
+
+# # keyList = resList.keys()
+# # for key in keyList
+# #     Print(str(key) + ":  " + resList[key])
+# # end
+# neName='014AMC-AmCo-GULN'
+# neFDN=GetNEFDN(neName)
+# Print(neFDN)
+# funcSubSetId = 1593835545
+# counter_info = GetCounterInfo(funcSubSetId, P60, 94, [neFDN])
+# for counter in counter_info
+#     Print(counter)
+
+# end
+
+# 1593835836
+
+def find_port(equipment: str) -> list
+    ports = equipment.split(',')
+    port_details = []
+    for port in ports
+        port_details.append(port[port.rfind('=') + 1::])
+
+    end
+    return port_details
+end
+
+def get_counters(neName, function_subset, counterseq)
+    OpenDB()
+        fdn=GetNEFDN(neName)
+        cond=GetPmCond()
+
+        cond[FUNCTION_SUBSET] = function_subset
+        cond[NE_FDN]=fdn
+        cond[COUNTERID_SEQ] = counterseq
+        cond[PERIOD] = P60
+        cond[TIME_DEFAULT]=ALL
+
+        iter = QueryRecord(cond)
+        lens = RecordCount(iter)
+        returnCode = False
+        content = list()
+        while not returnCode
+            returnCode, lists = NextRecord(iter)
+            lens = len(lists)
+            if lens == 0 and returnCode == False
+                continue
+            end
+            if lists
+                # Print(lists)
+                for i in range(0, len(lists))
+                    # Print(lists[i])
+                    port_data = find_port(lists[i][2])
+                    content.append([lists[i][0], lists[i][1]] + port_data + [str(lists[i][4][1])])
+                end
+            else
+                Print("No counter for this site")
+            end
+        end
+    CloseDB()
+    return content
+end
+
+

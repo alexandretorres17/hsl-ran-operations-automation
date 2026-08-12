@@ -1,0 +1,94 @@
+########################################################
+#### OSS Check ####
+########################################################
+def Check_OSS()
+'''
+The deployment-specific IP-to-zone mapping was removed from this public archive.
+'''
+    return "EXAMPLE_ZONE"
+end
+
+
+
+
+########################################################
+#### Send MML Commands ####
+########################################################
+def getColsToRows(p, obj=0, attridxs="")
+    cols = []
+    #Get specified row of the MML report  
+    row = GetRecordNum(p,obj)
+    col = GetAttrNum(p, obj) + 1
+    for i in range(row)
+        onecol = []
+        for j in attridxs
+            value = GetAttrValueByName(p, obj, j, i)
+            onecol.append(value)
+        end
+        cols.append(onecol)
+    end
+    return cols
+end
+
+
+
+def sendmmlcommand(command: str, select_from_column=0, *column_names: str, arrayByRow=1, entry=0) -> str
+    ClearMMLBuffer()
+    sendmml = SendMML(command)
+    rpt = GetMMLReport(0)
+    p = ParseMMLRpt(rpt)
+    getresult = GetResultCause(p)
+    col = []
+    if select_from_column == 1
+        if arrayByRow == 0
+            for name in column_names
+                col.append(GetColumnByName(p, entry, name))
+             end
+        else
+            col = getColsToRows(p, entry, column_names)
+        end
+        return p, rpt, getresult, col
+    end
+    return p, rpt, getresult
+end
+
+
+def write_to_csv(file, message)
+    f = Open(GetOutputPath() + "//" + file , 'w')  
+    WriteCSVFile(f, message) 
+end
+
+
+def ip_to_int(ip)
+    """Convert a dotted-decimal IP address to a 32-bit integer."""
+    octets = [int(octet) for octet in ip.split('.')]
+    return (octets[0] << 24) + (octets[1] << 16) + (octets[2] << 8) + octets[3]
+end
+
+def calculate_subnet_mask(bits)
+    """Convert CIDR bits to a subnet mask as a 32-bit integer."""
+    return (1 << 32) - (1 << (32 - int(bits)))
+end
+
+def mask_to_int(mask)
+    """
+    Converte a máscara de sub-rede para um inteiro de 32 bits.
+    Aceita máscara no formato decimal pontuado (ex.: '255.255.255.240') ou CIDR (ex.: 28).
+    """
+    if '.' in str(mask)  # Presença de '.' indica máscara decimal pontuada
+        return ip_to_int(mask)
+    else  # Assume formato CIDR
+        bits = int(mask)
+        return (1 << 32) - (1 << (32 - bits))
+    end
+end
+
+def is_ip_in_subnet(ip_address, network_ip, subnet_mask)
+    # Converter IPs e máscara para inteiros
+    ip_int = ip_to_int(ip_address)
+    network_int = ip_to_int(network_ip)
+    subnet_mask_int = mask_to_int(subnet_mask)
+
+    # Verificar se o IP está na mesma rede
+    return (ip_int & subnet_mask_int) == (network_int & subnet_mask_int)
+end

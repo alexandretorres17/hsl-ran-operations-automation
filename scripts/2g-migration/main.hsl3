@@ -1,0 +1,73 @@
+#encoding=utf-8
+f=Import('functions.hsl3')
+
+def Main()
+    userSelect=""
+    csv_path=""
+    while (userSelect!="Exit")
+        csv_path, userSelect, filepath=f.Entry_form(csv_path)
+
+        if len(csv_path) == 0
+            Print("\nERROR: No input file selected!\n")
+        else
+            SiteList,CsvData=f.Csv_to_array(csv_path)
+            startTime=StrfTime("%a, %d %b %Y %H:%M:%S", GMTime())
+            Print("Start time: "+startTime)
+            Print("Number of Sites: "+str(len(SiteList))+'\n')
+
+            for site in SiteList
+                siteName=site[0]
+                old_bsc_id=site[1]
+                new_bsc_id=site[2]
+                
+                # Ligar site
+                state=ConnectNE(siteName)                            
+                if state==1
+                    Print('Connected to: '+ siteName + "\n")
+
+                    # procurar rota que tem o old ip
+                    iprt = f.ParseMMLCMD("LST IPRT:;", site)
+                    destination = GetColumnByName(iprt, 0, "Destination IP")
+                    index_iprt = [i for i,v in enumerate(destination) if destination[i]==old_bsc_id]
+                    row = GetRowByIndex(iprt, 0, int(index_iprt[0]))
+                    
+                    if len(row) > 0
+                        # apagar rota antiga
+                        Print("  Delete Route:")
+                        mml = "RMV IPRT:RTIDX=" + row[0] + ";"
+                        Print("    " + mml)
+                        SendMML(mml)
+
+                        # criar rota nova
+                        Print("  Add Route:")
+                        mml = "ADD IPRT:RTIDX=" + row[0] + ",CN=" + row[1] + ",SRN=" + row[2] + ",SN=" + row[3] + ",SBT=BASE_BOARD,VRFIDX=" + row[8] + ",DSTIP=\"" + new_bsc_id + "\",DSTMASK=\"" + row[10] + "\",RTTYPE=NEXTHOP,NEXTHOP=\"" + row[11] + "\",MTUSWITCH=OFF,DESCRI=\"2G Abis\";"
+                        Print("    " + mml)
+                        SendMML(mml)
+                        
+                        # remover DHCPSVRIP antigo
+                        Print("  Remove DHCPSVRIP")
+                        mml = "RMV DHCPSVRIP:DHCPSVRIP=\"" + old_bsc_id + "\";"
+                        Print("    " + mml)
+                        SendMML(mml)
+
+                        # adicionar DHCPSCRIPT novo
+                        Print("  Remove DHCPSVRIP")
+                        mml = "ADD DHCPSVRIP:DHCPSVRIP=\"" + new_bsc_id + "\",DHCPRELAYIPSW=DISABLE;"
+                        Print("    " + mml)
+                        SendMML(mml)
+
+                    else
+                        Print("Rota não encontrada")
+                    end
+                else
+                    Print('/!\ NE is Disconnected: '+ str(siteName))
+                    Print('\n')
+                end
+            end
+        end
+        Print("\nFinish time: "+startTime)
+    end
+end
+
+
+Main()

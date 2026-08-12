@@ -1,0 +1,311 @@
+def Check_OSS()
+'''
+The deployment-specific IP-to-zone mapping was removed from this public archive.
+'''
+    return "EXAMPLE_ZONE"
+end 
+
+
+def Get_sites()
+'''
+Function to list existing 4G NEs on OSS (based on conditions)
+'''
+    nelist = GetNELst()
+    neList_final=list()
+
+   for ne in nelist
+        if not ne.startswith(("BSC","RNC"))
+            neList_final.append(ne)
+        end
+    end    
+    return neList_final
+end
+
+
+def Csv_to_array(csv_path)
+'''
+Function to list NEs in source CSV file
+'''
+    ne_list=[]
+    cell_list=[]
+    tac_list=[]
+    pci_list=[]
+    f = Open(csv_path) 
+    content = ReadCSVFile(f)
+    f.close()
+    for row in content[1:] 
+        ne_list.append(row[0])
+    end 
+    site_list=list(set(ne_list))
+    return site_list,content[1:]
+end
+
+
+def Entry_form(csv_path)
+    buttonList = ["Confirm", "Exit"]
+    formId = CreateForm(" Welcome to OSP NB-IOT Script!", buttonList)
+    
+    Label(formId,200, " Please select NE list file:")
+    Enter(formId)
+    hEdit1 = FileChooser(formId, "csv")
+
+    Enter(formId)
+    caption = 'Select one of the following options: ' 
+    choices = ['Generate MML Scripts', 'Check Cell Status']
+    hRadio1=RadioBoxGroup(formId, 200, choices, caption)
+
+    userSelect=ShowForm(formId)
+    csv_path = GetValue(hEdit1)
+    rbSelect=GetValue(hRadio1)
+    filepath=str(csv_path)[:str(csv_path).rfind('/')+1]
+    DeleteForm(formId)    
+    return csv_path,userSelect,rbSelect, filepath
+end
+
+
+def ParseMMLCMD(command, ne)
+'''
+Function to parse MML commands
+'''
+    ClearMMLBuffer()
+    sendMML = SendMML(command)
+        
+    if sendMML==1
+        mml = GetMMLReport(-1)
+    else
+        Print("Command: " + command + " failed on NE: " + ne)
+        p = "error"
+        return p
+    end
+
+    # Parse the MML message.
+    p = ParseMMLRpt(mml)
+    
+    return p
+end
+
+
+def cpri_check(ne,rru_subrack, locell, rruCab, rruSRN)
+    tmp_mml=""
+    p_cpri = ParseMMLCMD("DSP CPRIPORT:CN="+rruCab+",SRN=" +rruSRN+";", ne)
+    cpri_rate = GetColumnByName(p_cpri,0,"CPRI Bit Rate(bit/s)")
+    
+    if("25.0G" in cpri_rate or "9.8G" in cpri_rate or "4.9G" in cpri_rate)
+        Print("\tCPRI Bit Rate >= 4.9Gbit/s, sector " + str(rru_subrack + 1) + " can be activated.")
+        flag='OK (>= 4.9Gbit/s)'
+    elif("2.5G" in cpri_rate)
+        Print("\tCPRI Bit Rate equal to 2.5Gbit/s, sector " + str(rru_subrack + 1) + " can be activated with CPRI Compression.")
+        tmp_mml=tmp_mml+"MOD CELL:LOCALCELLID=" + locell + ",CPRICOMPRESSION=NORMAL_COMPRESSION; {" + ne + "}\n"
+        flag='OK with Compression(= 2.5Gbit/s)'
+    else
+        Print("\tCPRI Bit Rate smaller than 2.5Gbit/s, sector " + str(rru_subrack + 1) + " can not be activated.")
+        flag='NOT OK (< 2.5Gbit/s)'
+    end
+    return flag, tmp_mml
+end
+
+
+def bbp_check(ne, cells_to_add, existingIoT)
+    tmp_mml=""
+    bbpCapacity='FALSE'
+    p_bbp = ParseMMLCMD("LST BBP:;", ne)
+    cabinet_no = GetColumnByName(p_bbp,0,"Cabinet No.")
+    subrack_no = GetColumnByName(p_bbp,0,"Subrack No.")
+    slot_no = GetColumnByName(p_bbp,0,"Slot No.")
+    bbp_std = GetColumnByName(p_bbp,0,"Base Band Work Standard")
+    bbp_wm = GetColumnByName(p_bbp,0,"Work Mode")
+    
+    iotBBPList=[]
+    notBBPList=[]
+
+    max_iot_cells = 0
+
+    for bbp_idx in range(len(bbp_std)) 
+        if("NB-IoT:YES" in bbp_std[bbp_idx] or "FDD_NB-IoT" in bbp_wm[bbp_idx])            
+            p_bbpType = ParseMMLCMD("DSP BRDMFRINFO:CN="+cabinet_no[bbp_idx]+",SRN=" + subrack_no[bbp_idx] + ",SN=" + slot_no[bbp_idx]+";", ne)
+            bbpType  = GetColumnByName(p_bbpType, 0, "Type")[0]
+            if ('UBBPg' in bbpType)
+                max_iot_cells += 6
+            else
+                max_iot_cells += 3
+            end
+            iotBBPList.append(cabinet_no[bbp_idx]+"-"+subrack_no[bbp_idx]+"-"+slot_no[bbp_idx]+' ('+bbpType+')')
+   
+        elif("NB-IoT:NO" in bbp_std[bbp_idx] and bbp_std[bbp_idx] != "NULL" or "FDD_NB-IoT" not in bbp_wm[bbp_idx])
+            #Print("\tModified Working mode in Slot " + slot_no[bbp_idx])
+            notBBPList.append("CN="+cabinet_no[bbp_idx]+",SRN=" + subrack_no[bbp_idx] + ",SN=" + slot_no[bbp_idx])
+        end
+    end
+
+
+    if max_iot_cells >= cells_to_add+existingIoT
+        bbpCapacity='TRUE'
+        Print('\tBBP Capacity OK')    
+    
+    elif (len(notBBPList) == 0 and max_iot_cells < cells_to_add+existingIoT)
+        bbpCapacity='FALSE'
+        Print('\tNo BBP Capacity!')
+    
+    else
+        for NoIotBBP in notBBPList 
+            while max_iot_cells < cells_to_add+existingIoT 
+                p_bbpType = ParseMMLCMD("DSP BRDMFRINFO:"+NoIotBBP+";", ne)
+                bbpType  = GetColumnByName(p_bbpType, 0, "Type")[0]
+                if ('UBBPg' in bbpType)
+                    max_iot_cells += 6
+                else
+                    max_iot_cells += 3
+                end 
+
+                if ('LBBP' in bbpType)
+                    tmp_mml=tmp_mml+"MOD BBP:"+NoIotBBP+",TYPE=LBBP,WM=FDD_NBIOT; {" + ne + "}\n"
+                else 
+                    tmp_mml=tmp_mml+"MOD BBP:"+NoIotBBP+",TYPE=UBBP,BBWS=NBIOT-1; {" + ne + "}\n"
+                end
+
+                if max_iot_cells >= cells_to_add+existingIoT
+                    bbpCapacity='TRUE'
+                    Print('\tBBP Capacity OK')
+                    break
+                    #iotBBPList.append(NoIotBBP)
+                end
+            else
+                bbpCapacity='FALSE'
+                Print('\tNo BBP Capacity!')
+            end
+        end               
+    end
+
+    return tmp_mml, iotBBPList, bbpCapacity
+end
+
+def LicenseCheck(cellsnumber)
+    ClearMMLBuffer()    
+    CMD=("DSP LICINFO:ITEMTYPE=ITEM_ONLY;")
+    aux=SendMML(CMD)
+    mml = GetMMLReport()
+    p=ParseMMLRpt(mml)
+    
+    itemDesc=GetColumnByName(p, 1, 'Description')
+    itemAllocated=GetColumnByName(p, 1, 'Allocated')
+    itemConfig=GetColumnByName(p, 1, 'Config')
+    itemUsed=GetColumnByName(p, 1, 'Actual Used')
+
+    basicflag=0
+    iotcarrierflag=0 
+
+    for idx,item in enumerate(itemDesc)
+        if 'eNodeB NB-IoT Basic Software' in item and int(itemConfig[idx])+cellsnumber <= int(itemAllocated[idx])   
+            #Print('\t'+item+' | Allocated: '+itemAllocated[idx]+' | Configured: '+itemConfig[idx])
+            basicflag=1 
+        elif item == 'NB-IoT Carrier(NB-IoT)' and int(itemConfig[idx])+cellsnumber <= int(itemAllocated[idx])
+            iotcarrierflag=1
+            #Print('\t'+item+' | Allocated: '+itemAllocated[idx]+' | Configured: '+itemConfig[idx])
+        end
+    end
+
+    if basicflag != 0 and iotcarrierflag != 0
+        Print('\tLicense OK')
+        return 'License OK'
+    else
+        Print('\tLicense NOK')
+        return 'License NOK'
+    end
+end
+
+
+def CreateReportAll(data, datacells)
+    path=GetOutputPath()+"//"+"IoT_Report_"+StrfTime("%d%b%Y%H%M",LocalTime())+'.xls'
+
+    NewReport()    
+    
+    style1 = ReportStyle(Orange)
+    style2 = ReportStyle(Light_Green)
+    style3 = ReportStyle(Gold)
+    style4 = ReportStyle(Yellow)    
+
+    header=[['NE Name','NE Version','License Status','BBP Capacity', 'CPRI Status','Cell RefSignalPwr > 149?', 'IoT BBPs']]
+    headerCells=[['NE Name', 'Cell Name', 'Local Cell ID', 'Cell instance state', 'Cell latest setup time']]
+    ex1 = Selector(":$1 == 'NE is Disconnected'", style1, ROW_MODE)
+
+    Create_Sheet("Overview", header, data,[ex1])
+    Create_Sheet("Cell Status",headerCells, datacells,[ex1])
+
+    SaveReportAs(path)    
+    return path
+end
+
+
+def CreateCellRport(datacells)
+    path=GetOutputPath()+"//"+"CellStatus_Report_"+StrfTime("%d%b%Y%H%M",LocalTime())+'.xls'
+
+    NewReport()    
+    
+    style1 = ReportStyle(Orange)
+    style2 = ReportStyle(Light_Green)
+    style3 = ReportStyle(Gold)
+    style4 = ReportStyle(Yellow)    
+
+    headerCells=[['NE Name', 'Cell Name', 'Local Cell ID', 'Cell instance state', 'Cell latest setup time']]
+    ex1 = Selector(":$1 == 'NE is Disconnected'", style1, ROW_MODE)
+
+    Create_Sheet("Cell Status",headerCells, datacells,[ex1])
+
+    SaveReportAs(path)    
+    return path
+end
+
+
+def Create_Sheet(sheet_name,sIddata,data_report,marks)    
+    size=len(sIddata[0])
+    style1 = ReportStyle(Dark_Blue,'L',(0,10,39,1))
+    exTop = Selector("$0 != ''", style1 , ROW_MODE)
+    
+    condition_exp=[exTop]
+    if marks!=""
+        marks.extend(condition_exp)
+    else
+        marks=condition_exp
+    end
+    
+    sId = AddSheet(sheet_name)   
+    for col in range(size) 
+        ret = SetColumnWidth(sId, col, 2 ) 
+    end
+    
+    for data in data_report
+        sIddata.append(data)
+    end
+    
+    tId = AddTable(sId, len(sIddata), len(sIddata[0])) 
+    rId = AddRange(tId, 0, 0, 0, len(sIddata[0])-1 )
+
+    SetRangeBGColor(rId, Dark_Blue)    
+    SetRangeFont(rId, 0, size, 39, 1) 
+    SetTableValueEx(tId, sIddata,marks)
+
+end
+
+
+def getCellStatus(site)
+'''
+Get cell status
+'''
+    cellList=[]
+    ClearMMLBuffer()
+    
+    CMD=("DSP CELL:;")
+    aux=SendMML(CMD)
+    mml=GetMMLReport()
+    p=ParseMMLRpt(mml)
+    locellid=GetColumnByName(p, 0, 'Local Cell ID')
+    cellname=GetColumnByName(p, 0, 'Cell Name')
+    cellstate=GetColumnByName(p, 0, 'Cell instance state')
+    setuptime=GetColumnByName(p, 0, 'Cell latest setup time')
+
+    for idx,cellid in enumerate(locellid)
+        cellList.append([site, cellname[idx], cellid, cellstate[idx], setuptime[idx]])
+    end
+    return cellList
+end
+

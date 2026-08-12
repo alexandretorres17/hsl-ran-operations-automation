@@ -1,0 +1,134 @@
+#encoding=utf-8
+def Main()
+    secs1 = Time()
+    
+    form = CreateForm("Send PKI L900!",["Confirm", "Cancel"])   
+        
+    Label(form,250, "3G Site Name List. [Format: SITE_EXAMPLE SITE_EXAMPLE ]")
+    hEdit4 = Edit(form, 150)
+    Enter(form)
+    
+    option_button = ShowForm(form)
+    if(option_button == "Cancel")
+        Print("Operation canceled.")
+        DeleteForm(form)
+        secs2 = Time()
+        execution_time = secs2 - secs1
+        Print("Execution Time: " + StrfTime("%H:%M:%S", GMTime(execution_time)))
+        return
+    end
+   
+    NE_list = GetValue(hEdit4).split(" ")
+    
+    NE_list = [item + "L" for item in NE_list if item != ""]
+    Print(NE_list)
+    
+    LoginFTP("sftp.example.invalid","EXAMPLE_USER","EXAMPLE_PASSWORD",8822,"SFTP")
+
+    if GetFTPStatus()
+        Print("Login to FTP succeeded.")
+    else
+        Print("Login to FTP failed")
+        secs2 = Time()
+        execution_time = secs2 - secs1
+        Print("Execution Time: " + StrfTime("%H:%M:%S", GMTime(execution_time)))
+        return
+    end
+    
+    for ne in NE_list
+        
+        mml_ver = ParseMMLCMD(ne,"LST VER:;",1)
+        
+        if(mml_ver == "error")
+            form1 = CreateForm("Manual Input!",["Confirm", "Cancel"])   
+        
+            Label(form1,250, "Serial Number ")
+            hEdit5 = Edit(form1, 150)
+            Enter(form1)
+            
+            option_button = ShowForm(form1)
+            if(option_button == "Cancel")
+                Print("Operation canceled.")
+                DeleteForm(form1)
+                secs2 = Time()
+                execution_time = secs2 - secs1
+                Print("Execution Time: " + StrfTime("%H:%M:%S", GMTime(execution_time)))
+                return
+            end
+            
+            ESN = GetValue(hEdit5)
+            
+            fp_PKI = Open(ne + ".csv","a+")
+            fp_PKI.write(ESN + ".vendor.example.invalid;always;OPEN\n")
+            file_PKI = fp_PKI
+
+            file_PKI = str(file_PKI)[str(file_PKI).find("<_io.TextIOWrapper name='\\")+len("<_io.TextIOWrapper name='\\"):str(file_PKI).rfind("' mode")] 
+
+            folder_FTP = "/UPLOAD/" + ne + ".csv"
+            fp_PKI.close() 
+            if(Upload(file_PKI, folder_FTP))
+                Print(ne + ": UMPT ESN: " + ESN + " registered successfully!")
+            else
+                Print(ne + ": UMPT ESN: " + ESN + " registered unsuccessfully!")
+            end
+            
+            DeleteForm(form1) 
+            continue
+        end
+        
+        if("Pico" in mml_ver)
+            p_esn = ParseMMLCMD(ne,"DSP BRDMFRINFO:;")
+            ESN = GetAttrValueByName(p_esn,0,"Serial Number",0)
+        else
+            p_devip = ParseMMLCMD(ne,"LST DEVIP:;")
+            subrack = GetAttrValueByName(p_devip,0,"Subrack No.",0)
+            slot = GetAttrValueByName(p_devip,0,"Slot No.",0)
+            p_esn = ParseMMLCMD(ne,"DSP BRDMFRINFO:CN=0,SRN=" + subrack + ",SN=" + slot + ";")
+            ESN = GetAttrValueByName(p_esn,0,"Serial Number",0)
+        end
+        
+        fp_PKI = Open(ne + ".csv","a+")
+        fp_PKI.write(ESN + ".vendor.example.invalid;always;OPEN\n")
+        file_PKI = fp_PKI
+
+        file_PKI = str(file_PKI)[str(file_PKI).find("<_io.TextIOWrapper name='\\")+len("<_io.TextIOWrapper name='\\"):str(file_PKI).rfind("' mode")] 
+
+        folder_FTP = "/UPLOAD/" + ne + ".csv"
+        fp_PKI.close() 
+        if(Upload(file_PKI, folder_FTP))
+            Print(ne + ": UMPT ESN: " + ESN + " registered successfully!")
+        else
+            Print(ne + ": UMPT ESN: " + ESN + " registered unsuccessfully!")
+        end
+    end
+    
+    DeleteForm(form)
+    LogoutFTP()
+    
+    secs2 = Time()
+    execution_time = secs2 - secs1
+    Print("Execution Time: " + StrfTime("%H:%M:%S", GMTime(execution_time)))
+    
+end
+
+def ParseMMLCMD(NE,command,mml_flag=0)
+    ConnectNE(NE) 
+    ClearMMLBuffer()
+    sendMML = SendMML(command)
+        
+    if sendMML==1
+        mml = GetMMLReport(-1)
+        p = ParseMMLRpt(mml)
+    else
+        Print("Command: " + command + " failed on NE: " + NE)
+        p = "error"
+        mml = "error"
+    end
+    if(mml_flag==1)
+        return mml
+    else
+        return p
+    end
+end
+
+Main()

@@ -1,0 +1,188 @@
+mml = Import('sendmml.hsl3')
+data = Import('get_configured_data.hsl3')
+counters = Import('energy_counters.hsl3')
+
+def Check_OSS()
+'''
+The deployment-specific IP-to-zone mapping was removed from this public archive.
+'''
+    return "EXAMPLE_ZONE"
+end 
+
+
+
+def write_to_file(path, string) 
+    if (IsFile(path)==False)
+        fp1 = Open(path,'a')
+        #Print(f + ' file has been created!')
+        fp1.close()
+    end  
+    fp = Open(path, "w+")
+    fp.write(string)
+    fp.close()
+end 
+
+def write_to_csv(file, message)
+    f = Open(GetOutputPath() + "//" + file , 'w')  
+    WriteCSVFile(f, message) 
+end
+
+
+def map_cell_on_sectoreqm(sectoreqm, trx_group_0, trx_group_1, local_cell)
+    data = {item: trx_group_0[i] for i, item in enumerate(sectoreqm)}
+    for i, item in enumerate(trx_group_1)
+        for k, v in data.items()
+            if v == item
+                data[k] = local_cell[i]
+            end
+        end
+       
+    end 
+    
+    return list(data.values())
+    
+end
+
+
+def cell_data() -> dict
+    """
+    Returns a dictionary. The keys are the technologies and the values are the 
+    cell ids and sector equipments for all technologies
+    cell_details = {'eNodeB: [[0, 1, 2], [90, 91, 92]], 'GBTS: [[3111, 3112, 3113], [60, 61, 62]]}
+    """
+    apps = data.ne_type()
+    cell_details = {}
+    if 'eNodeB' in apps
+        p_lst_cell, rpt_lst_cell, getresult_lst_cell, lte_cell_details = mml.sendmmlcommand('LST EUCELLSECTOREQM:;', 1, 'Local cell ID', 'Sector equipment ID')
+        cell_details['eNodeB'] = lte_cell_details
+    end
+    if 'NodeB' in apps
+        p_lst_ucell, rpt_lst_ucell, getresult_lst_ucell, umts_cell_details = mml.sendmmlcommand('LST ULOCELLSECTOREQM:;', 1, 'Local Cell ID', 'Sector Equipment ID')
+        cell_details['NodeB'] = umts_cell_details
+    end
+    if 'GBTS' in apps
+        p_lst_gcell, rpt_lst_gcell, getresult_lst_gcell, gsm_cell_details = mml.sendmmlcommand('LST GTRXGROUPSECTOREQM:;', 1, 'TRX Group ID', 'Sector Equipment ID')
+        p_lst_gcell_1, rpt_lst_gcell_1, getresult_lst_gcell_1, gsm_cell_details_1 = mml.sendmmlcommand('LST GTRXGROUP:;', 1, 'TRX Group ID', 'Local Cell ID')
+        if len(gsm_cell_details[1]) != len(gsm_cell_details_1[1])
+            cells = map_cell_on_sectoreqm(gsm_cell_details[1], gsm_cell_details[0], gsm_cell_details_1[0], gsm_cell_details_1[1])
+            gsm_cell_details_1[1] = cells
+        end
+        cell_details['GBTS'] = [gsm_cell_details_1[1], gsm_cell_details[1]]    
+    end
+    return cell_details
+end
+
+
+def get_rru(sectoreqm: str) -> list
+    """
+    it gets the RRU description and the cabinet, subrack and slot numbers
+    """
+    rru_details = []
+    p_lst_sectoreqm, rpt_lst_sectoreqm, getresult_lst_sectoreqm, board_ports = mml.sendmmlcommand('LST SECTOREQM:SECTOREQMID={};'.format(sectoreqm), 1, 'Subrack No.', 'Cabinet No.', 'Slot No.', entry=1)
+    for item in board_ports[0]
+        p_dsp_brd_mfrinfo, rpt_dsp_brd_mfrinfo, getresult_dsp_brd_mfrinfo, rru_data = mml.sendmmlcommand('DSP BRDMFRINFO:CN=0,SRN={},SN=0;'.format(item), 1,'Description')
+        if rru_data[0]
+            rru_details.append(rru_data[0][0])
+        else
+            rru_details.append('NULL')
+        end
+    end
+    return rru_details, board_ports[0], board_ports[1], board_ports[2]
+end
+
+
+def average_per_rru(site, rru_subrack)
+    content = counters.get_counters(site, 1593835545, [1593835836])
+    energy_sum = 0
+    inc = 0
+    for item in content
+        if rru_subrack in item
+            inc += 1
+            energy_sum += float(item[-1])
+        end
+    
+    end
+    avg_power = energy_sum / inc
+    return avg_power
+end
+
+
+def send_mail(body, attach)
+    loginInfo=CreateLoginInfo('192.0.2.10')
+    mailInfo1=CreateMailInfo() 
+    # mailInfo1['TO_ADDR']=('portfolio@example.invalid','portfolio@example.invalid','portfolio@example.invalid','portfolio@example.invalid','portfolio@example.invalid','portfolio@example.invalid','portfolio@example.invalid','portfolio@example.invalid','portfolio@example.invalid','portfolio@example.invalid','portfolio@example.invalid', 'portfolio@example.invalid')
+    mailInfo1['TO_ADDR']=('portfolio@example.invalid', 'portfolio@example.invalid')
+    # 
+    mailInfo1['FROM_ADDR'] = 'portfolio@example.invalid'
+    mailInfo1['MAIL_SUBJECT'] = 'ISStar energy consumption test'
+    mailInfo1['MAIL_BODY'] = body
+    mailInfo1['MAIL_ATTACH'] = attach
+    result1=SendMail(mailInfo1) 
+    Print(str(result1)) 
+    errorInf1=result1
+    # error code
+    errorCode=errorInf1[0]
+    #error message 
+    errorMsg=errorInf1[1]
+end
+
+def nodes() -> list
+    """ get the NEs """
+    bts3900 = GetNELstByType("BTS3900")
+    bts3900lte = GetNELstByType("BTS3900 LTE")
+    egbts = GetNELstByType("eGBTS")
+    bts5900 = GetNELstByType("BTS5900")
+
+    ## Alteração Spain
+    
+    return bts3900 + bts3900lte + egbts + bts5900
+end
+
+def Get_sites()
+'''
+Function to list existing 4G NEs on OSS (based on conditions)
+'''
+    nelist = GetNELst()
+    neList_final=list()
+
+   for ne in nelist
+        if not ne.startswith(("BSC","RNC"))
+            neList_final.append(ne)
+        end
+    end    
+    return neList_final
+end
+
+
+########### global scope ################
+sites = Get_sites()
+oss_area = Check_OSS()
+content = ''
+csv_content = [['Site', 'technology', 'cell ID', 'RRU', 'RRU description', 'OSS']]
+
+for site in sites
+    ret = ConnectNE(site)
+    if ret != 0
+        c_data = cell_data()
+        for k, v in c_data.items()
+            # k is the key within the dictionary and represents the technology
+            # v is the value within the dictionary; a list consisting of 2 elements -> a list of cell IDs and a list of sector eqm IDs
+            for i, sector in enumerate(v[1])
+                rru_details, subrack, cabinet, slot = get_rru(v[1][i])
+                if rru_details
+                    for j, detail in enumerate(set(subrack))
+                        # average_power = average_per_rru(site, subrack[j])
+                        Print('{};{};{};{}/{}/{};{};{}'.format(site, k, v[0][i], cabinet[j], subrack[j], slot[j], rru_details[j], oss_area).split(';'))
+                        # content += '{} -> {} -> cell ID: {} -> RRU: 0/{}/0 -> RRU description: {}\n'.format(site, k, v[0][i],  subrack, rru_details[0].split(',')[3])
+                        csv_content.append('{};{};{};{}/{}/{};{};{}'.format(site, k, v[0][i], cabinet[j], subrack[j], slot[j], rru_details[j], oss_area).split(';'))
+                    end
+                end
+            end 
+        end
+    end
+end
+
+write_to_csv('energy_csv.csv', csv_content)
+
+## Ainda não funciona o email
+# send_mail('Please have a look to the attachment', '/example/output/energy_csv.csv')

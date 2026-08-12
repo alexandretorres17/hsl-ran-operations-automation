@@ -1,0 +1,10 @@
+sites = GetNELstByType('BTS5900')
+Print(sites)
+for site in sites[0:10]
+    errorcode,taskid1 = CreateTask("test_parallel_execution.hsl3", {'sites': site})
+    if (errorcode == 0)#If 0 is returned, it indicates that creating the subtask is successful.        
+        Print("Subtask id is " + taskid1)#Print the ID of the subtask. 
+        Print("Invoke Wait interface.") 
+    end 
+
+end

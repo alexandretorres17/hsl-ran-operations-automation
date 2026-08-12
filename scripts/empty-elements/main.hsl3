@@ -1,0 +1,45 @@
+Functions = Import('functions.hsl3') 
+
+OSS = ''
+OSS = Functions.Check_OSS()
+
+empty_elements = [['BSC/RNC','BSC/RNC Type', 'Total 2G Sites', 'Total 3G Sites', 'Total Sites', 'OSS', 'Date']]
+
+ne_list = GetNELstByType('BSC6900 GSM')
+ne_list += GetNELstByType('BSC6900 GU')
+ne_list += GetNELstByType('BSC6900 UMTS')
+ne_list += GetNELstByType('BSC6910 GSM')
+ne_list += GetNELstByType('BSC6910 GU')
+ne_list += GetNELstByType('BSC6910 UMTS')
+
+for ne in ne_list
+    valida = ConnectNE(ne)
+    total_sites_2g = 0
+    total_sites_3g = 0
+    total_sites = 0
+    
+    if valida != 1
+        continue
+    end
+
+    neType = GetNEType()
+    if "GSM" in neType
+        p_site_list, reprt_site_list, result_site_list = Functions.sendmmlcommand("LST BTS:;")
+        total_sites_2g = GetRecordNum(p_site_list, 0)
+    end
+    if "UMTS" in neType
+        p_site_list, reprt_site_list, result_site_list = Functions.sendmmlcommand("LST UNODEB:;")
+        total_sites_3g = GetRecordNum(p_site_list, 0)
+    end
+    if "GU" in neType
+        p_site_list, reprt_site_list, result_site_list = Functions.sendmmlcommand("LST BTS:;")
+        total_sites_2g = GetRecordNum(p_site_list, 0)
+        p_site_list, reprt_site_list, result_site_list = Functions.sendmmlcommand("LST UNODEB:;")
+        total_sites_3g = GetRecordNum(p_site_list, 0)
+    end
+    total_sites = total_sites_3g + total_sites_2g
+    empty_elements.append([ne, neType, total_sites_2g, total_sites_3g, total_sites, OSS, StrfTime("%d/%m/%Y", GMTime())])
+
+end
+
+Functions.write_to_csv(OSS + '_Empty_Elements.csv', empty_elements)

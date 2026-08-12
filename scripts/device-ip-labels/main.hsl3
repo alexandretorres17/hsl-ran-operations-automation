@@ -1,0 +1,45 @@
+f=Import("functions.hsl3")
+
+oss_area = f.Check_OSS()
+mmlScripts=""
+XlsData=[]
+
+SiteList = f.Get_sites()
+
+#SiteList = ['SITE_EXAMPLE']
+
+startTime=StrfTime("%a, %d %b %Y %H:%M:%S", GMTime())
+Print("Start time: "+startTime)
+Print("Number of Sites: "+str(len(SiteList))+'\n')
+
+site_count=0
+
+for site in SiteList
+    site_count=site_count+1
+    state=ConnectNE(site)
+    if state==1
+        Print(str(site_count)+" - "+site+" - NE is Connected!")
+        neType=GetNEType()
+        if 'PICO' not in neType.upper() and 'DBS3800' not in neType.upper()
+            ok=f.getDevip(site)
+            if ok != 'error' 
+                mmlScripts += ok
+            end
+        else
+            Print('\tUnsupported NE Type: '+neType)
+            XlsData.append([site,neType, 'Unsupported NE Type', '', ''])
+        end
+    else
+        Print(str(site_count)+" - "+site+" - NE is Disconnected")
+        XlsData.append([site,'NE is Disconnected','', '', ''])
+    end
+end
+Print('\n'+mmlScripts)
+
+fp = Open(GetOutputPath() + "//DEVIP_Label_MML_"+oss_area+".txt", "w+")
+fp.write(mmlScripts)
+fp.close()
+#outPath = f.CreateReport(XlsData, oss_area)
+#Print('Output report saved in: '+outPath)
+endTime=StrfTime("%a, %d %b %Y %H:%M:%S", GMTime())
+Print('\n'+"End time: "+endTime)

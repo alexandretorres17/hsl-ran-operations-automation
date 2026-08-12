@@ -1,0 +1,141 @@
+mml = Import('sendmml.hsl3')
+
+def wait()
+    form = CreateForm("Please wait",["OK"])  
+    Label(form,180, "Manually check needed!!!")
+
+    UserSelect = ShowForm(form)
+    while (UserSelect != "OK") 
+        Print("Please check the configuration for this site")
+    end
+
+end
+
+
+################ get the NE type -> NodeB, eNodeB, etc... #########################################
+def ne_type()
+    p_dsp_app, rpt_dsp_app, getresult_dsp_app, app_dsp_app = mml.sendmmlcommand("DSP APP:;", 1, "Application Type")
+    return app_dsp_app[0]
+end
+
+################ get next hop IP based on the traffic IP address - ok for RO network ###################################
+def get_next_hop(ip)
+    ip_2_lst = ip.split('.')
+    ip_2_lst[-1] = str(String2Int(ip_2_lst[-1])[1] -1)
+    next_hop = '.'.join(ip_2_lst)
+    # Print('Next hop ip -> {}'.format(next_hop))
+    return next_hop
+end
+
+################# check if there is a source IP route configured on NE #############################
+def check_src_route(ip) -> True or False
+    p_lst_srciprt, rpt_lst_srciprt, getresult_lst_srciprt, src_ip = mml.sendmmlcommand("LST SRCIPRT:;", 1, "Source IP Address")
+    if ip in src_ip[0]
+        return True
+    end
+    return False
+    
+end
+
+def add_rt_brd_type(brd_type, app, brd_slot, ip, next_hop)
+    if app == '2G'
+        ind = '3'
+        label = '2G'
+    elif app == '3G'
+        ind = '4'
+        label = '3G'
+    end
+    if brd_type == 'Ethernet Cover Board'
+        sbt = 'ETH_COVERBOARD'
+    elif brd_type == 'Base Board'
+        sbt = 'BASE_BOARD'
+    end
+    # Print('ADD SRCIPRT:SRCRTIDX=3,SN={},SBT={},SRCIP="{}",RTTYPE=NEXTHOP,NEXTHOP="{}",USERLABEL="2G";'.format(brd_slot, 'ETH_COVERBOARD', ip, next_hop))
+    p_add_srciprt, rpt_add_srciprt, getresult_add_srciprt = mml.sendmmlcommand('ADD SRCIPRT:SRCRTIDX={},SN={},SBT={},SRCIP="{}",RTTYPE=NEXTHOP,NEXTHOP="{}",USERLABEL="{}";'.format(ind, brd_slot, sbt, ip, next_hop, label))
+    Print('ADD SRCIPRT {} -> {}: '.format(ip, next_hop, getresult_add_srciprt))
+    if 'succee' not in getresult_add_srciprt
+        Print('Manual implementation before you hit OK')
+        wait()
+    end
+end
+
+################ add src ip route to NE ############################
+def add_src_route(ip, app, brd_slot, brd_type)
+    next_hop = get_next_hop(ip)
+    # Print(next_hop)
+    if app == 'NodeB'
+        add_rt_brd_type(brd_type, '3G', brd_slot, ip, next_hop)
+    elif app == 'LTE app'
+        p_add_srciprt, rpt_add_srciprt, getresult_add_srciprt = mml.sendmmlcommand('ADD SRCIPRT:SRCRTIDX=0,SN=7,SBT=BASE_BOARD,SRCIP="{}",RTTYPE=NEXTHOP,NEXTHOP="{}",USERLABEL="Traffic_route_LTE";'.format(ip, next_hop))
+        Print('ADD SRCIPRT {} -> {}: '.format(ip, next_hop, getresult_add_srciprt))
+        if 'succee' not in getresult_add_srciprt
+            Print('Manual implementation before you hit OK')
+            wait()
+        end
+    elif app == 'GBTS'
+        add_rt_brd_type(brd_type, '2G', brd_slot, ip, next_hop)
+    end
+end
+
+def get_3g_ip(site)
+    p_lst_iub, rpt_lst_iub, getresult_lst_iub, epgroup = mml.sendmmlcommand("LST IUB:;", 1, "EndPoint Group ID")
+    # Print(epgroup)
+    p_lst_epgroup, rpt_lst_epgroup, getresult_lst_epgroup, up_host = mml.sendmmlcommand('LST EPGROUP:EPGROUPID=' + epgroup[0][0] + ';', 1, "User Plane Host List")
+    p_lst_uphost, rpt_lst_uphost, getresult_lst_uphost, ip_3g = mml.sendmmlcommand('LST USERPLANEHOST:UPHOSTID=' + up_host[0][0] + ';', 1, "Local IP Address")
+    p_lst_devip, rpt_lst_devip, getresult_lst_devip, board_details = mml.sendmmlcommand('LST DEVIP:;', 1, "IP Address", 'Slot No.', 'Subboard Type')
+    ip3g = ip_3g[0][0]
+    for i, ip in enumerate(board_details[0])
+        if ip == ip3g
+            slt = board_details[1][i]
+            brd_type = board_details[2][i]
+        end 
+    end
+    return ip_3g[0][0], slt, brd_type
+end
+
+def get_2G_ip(site)
+    p_lst_abis, rpt_lst_abis, getresult_lst_abis, epgroup = mml.sendmmlcommand("LST ABIS:;", 1, "End Node Object Homing Group ID")
+    p_lst_epgroup, rpt_lst_epgroup, getresult_lst_epgroup, up_host = mml.sendmmlcommand('LST EPGROUP:EPGROUPID=' + epgroup[0][0] + ';', 1, "User Plane Host List")
+    p_lst_uphost, rpt_lst_uphost, getresult_lst_uphost, ip_2g = mml.sendmmlcommand('LST USERPLANEHOST:UPHOSTID=' + up_host[0][0] + ';', 1, "Local IP Address")
+    p_lst_devip, rpt_lst_devip, getresult_lst_devip, board_details = mml.sendmmlcommand('LST DEVIP:;', 1, "IP Address", 'Slot No.', 'Subboard Type')
+    ip2g = ip_2g[0][0]
+    for i, ip in enumerate(board_details[0])
+        if ip == ip2g
+            slt = board_details[1][i]
+            brd_type = board_details[2][i]
+        end 
+    end
+    return ip_2g[0][0], slt, brd_type
+end
+
+def get_lte_ip(site)
+    p_devip, rpt_devip, getresult_devip, devip_data = mml.sendmmlcommand("LST DEVIP:;", 1, "IP Address", 'Cabinet No.', 'Subrack No.', 'Slot No.', 'Port Type', 'User Label')
+    ips, cabinet_nb, subrack_nb, slot_nb, port_type, user_label = devip_data[0], devip_data[1], devip_data[2], devip_data[3], devip_data[4], devip_data[5]
+    ########### LST IPRT ###########################################################
+    p_iprt, rpt_iprt, getresult_iprt, next_hop_data = mml.sendmmlcommand("LST IPRT:;", 1, "Next Hop IP", 'Cabinet No.', 'Subrack No.', 'Slot No.', 'Route Index')
+    next_hop_ips, cabinet_nb_rt, subranck_nb_rt, slot_nb_rt, route_index = next_hop_data[0], next_hop_data[1], next_hop_data[2], next_hop_data[3], next_hop_data[4]
+
+    ########### LST SRCIPRT ###########################################################
+    p_srciprt, rpt_srciprt, getresult_srciprt, src_data = mml.sendmmlcommand("LST SRCIPRT:;", 1, "Source Route Index", 'Source IP Address')
+    src_index = src_data[0]
+    src_ip_address = src_data[1]
+    ########### LST SCTPHOST ###########################################################
+    p_lstsctphost, rpt_lstsctphost, getresult_lstsctphost, sctp_data = mml.sendmmlcommand("LST SCTPHOST:;", 1, "First Local IP Address")
+    local_sctp_ip = sctp_data[0]
+    for i in range(0, len(ips))
+        if cabinet_nb[i] == '0' and subrack_nb[i] == '0' and slot_nb[i] == '7'
+            ip_new = get_next_hop(ips[i])
+            if (ip_new[0:6] == '192.0' or ip_new[0:6] == '198.51') and ips[i] in local_sctp_ip
+                ip_newrt = ip_new
+                dev_eth_ip = ips[i]
+                Print('LTE interface IP: %s'%dev_eth_ip)
+                Print('LTE next-hop IP: %s'%ip_newrt)
+                Print('The source IPs already configured: %s'%src_ip_address)
+                Print('-------------------------------------------------------------------------')
+                break
+            end
+        end
+    end
+
+    return dev_eth_ip, ip_newrt
+end

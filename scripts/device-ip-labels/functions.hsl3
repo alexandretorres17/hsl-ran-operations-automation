@@ -1,0 +1,344 @@
+def Check_OSS()
+'''
+The deployment-specific IP-to-zone mapping was removed from this public archive.
+'''
+    return "EXAMPLE_ZONE"
+end 
+
+
+def Get_sites()
+'''
+Function to list existing 4G NEs on OSS (based on conditions)
+'''
+    nelist = GetNELst()
+    neList_final=list()
+    neBlacklist = ['LAB_NODE_A', 'LAB_NODE_B']
+
+   for ne in nelist
+        if not (ne.startswith(("BSC","RNC","REP","IPCLK","IPCLCK")) or ne in neBlacklist)
+            neList_final.append(ne)
+        end
+    end    
+    return neList_final
+end
+
+
+def ParseMMLCMD(command)
+'''
+Function to parse MML commands
+'''
+    ClearMMLBuffer()
+    sendMML = SendMML(command)
+
+    if sendMML==1
+        mml = GetMMLReport(-1)
+    else
+        p = "error"
+        return p
+    end
+
+    # Parse the MML message.
+    p = ParseMMLRpt(mml)
+    
+    return p
+end
+
+
+def getDevip(site)
+'''
+Get DEVIP configuration
+'''
+    p=ParseMMLCMD("LST DEVIP:;")
+    if (p == "error") 
+        Print ('\t'+ p)
+        return p
+    end
+    cabNo=GetColumnByName(p, 0, 'Cabinet No.')
+    subNo=GetColumnByName(p, 0, 'Subrack No.')
+    slotNo=GetColumnByName(p, 0, 'Slot No.')
+    brdType=GetColumnByName(p, 0, 'Subboard Type')
+    portType=GetColumnByName(p, 0, 'Port Type')
+    portNo=GetColumnByName(p, 0, 'Port No.')
+    ipAddress=GetColumnByName(p, 0, 'IP Address')
+    label=GetColumnByName(p, 0, 'User Label')
+    mask=GetColumnByName(p, 0, 'Mask')
+
+    omchIp=getOmch()
+    iubIp,abisIp=getIppath()
+    inner4gosp, inner4gvdf, inner5gosp, inner5gvdf=getinner()
+    vlanmap4g, vlanmap5g=getvlanmap()
+    mmlScripts=""
+
+    if len(ipAddress) != 0
+        for idx,devip in enumerate(ipAddress)
+            if (devip == omchIp and label[idx].upper() != 'OMCH')
+                #Print('\t'+devip+' - New Label: OMCH') 
+                mmlScripts +='MOD DEVIP:CN='+cabNo[idx]+',SRN='+subNo[idx]+',SN='+slotNo[idx]+',SBT='+brdType[idx]+',PT='+portType[idx]+',PN='+portNo[idx]+',IP="'+devip+'",USERLABEL="OMCH"; {'+site+'}\n'
+            elif (devip == iubIp and label[idx].upper() != '3G IUB')
+                #Print('\t'+devip+' - New Label: 3G Iub')
+                mmlScripts +='MOD DEVIP:CN='+cabNo[idx]+',SRN='+subNo[idx]+',SN='+slotNo[idx]+',SBT='+brdType[idx]+',PT='+portType[idx]+',PN='+portNo[idx]+',IP="'+devip+'",USERLABEL="3G Iub"; {'+site+'}\n'
+            elif (devip == abisIp and label[idx].upper() != '2G ABIS')
+                #Print('\t'+devip+' - New Label: 2G Abis')
+                mmlScripts +='MOD DEVIP:CN='+cabNo[idx]+',SRN='+subNo[idx]+',SN='+slotNo[idx]+',SBT='+brdType[idx]+',PT='+portType[idx]+',PN='+portNo[idx]+',IP="'+devip+'",USERLABEL="2G ABIS"; {'+site+'}\n'
+            elif (devip == inner4gosp and label[idx].upper() != 'INNER 4G OSP')
+                #Print('\t'+devip+' - New Label: Inner 4G OSP')
+                mmlScripts +='MOD DEVIP:CN='+cabNo[idx]+',SRN='+subNo[idx]+',SN='+slotNo[idx]+',SBT='+brdType[idx]+',PT='+portType[idx]+',PN='+portNo[idx]+',IP="'+devip+'",USERLABEL="Inner 4G OSP"; {'+site+'}\n'
+            elif (devip == inner4gvdf and label[idx].upper() != 'INNER 4G VDF')
+                #Print('\t'+devip+' - New Label: Inner 4G VDF')
+                mmlScripts +='MOD DEVIP:CN='+cabNo[idx]+',SRN='+subNo[idx]+',SN='+slotNo[idx]+',SBT='+brdType[idx]+',PT='+portType[idx]+',PN='+portNo[idx]+',IP="'+devip+'",USERLABEL="Inner 4G VDF"; {'+site+'}\n'
+            elif (devip == inner5gosp and label[idx].upper() != 'INNER 5G OSP')
+                #Print('\t'+devip+' - New Label: Inner 5G OSP')
+                mmlScripts +='MOD DEVIP:CN='+cabNo[idx]+',SRN='+subNo[idx]+',SN='+slotNo[idx]+',SBT='+brdType[idx]+',PT='+portType[idx]+',PN='+portNo[idx]+',IP="'+devip+'",USERLABEL="Inner 5G OSP"; {'+site+'}\n'
+            elif (devip == inner5gvdf and label[idx].upper() != 'INNER 5G VDF')
+                #Print('\t'+devip+' - New Label: Inner 5G VDF')
+                mmlScripts +='MOD DEVIP:CN='+cabNo[idx]+',SRN='+subNo[idx]+',SN='+slotNo[idx]+',SBT='+brdType[idx]+',PT='+portType[idx]+',PN='+portNo[idx]+',IP="'+devip+'",USERLABEL="Inner 5G VDF"; {'+site+'}\n'
+            end
+            if (vlanmap4g != '')
+                if (is_ip_in_subnet(devip, vlanmap4g, mask[idx]) and label[idx].upper() != 'OUTER 4G')
+                    #Print('\t'+devip+' - New Label: Outer 4G')
+                    mmlScripts +='MOD DEVIP:CN='+cabNo[idx]+',SRN='+subNo[idx]+',SN='+slotNo[idx]+',SBT='+brdType[idx]+',PT='+portType[idx]+',PN='+portNo[idx]+',IP="'+devip+'",USERLABEL="Outer 4G"; {'+site+'}\n'
+                end
+            end
+            if (vlanmap5g != '')
+                if (is_ip_in_subnet(devip, vlanmap5g, mask[idx]) and label[idx].upper() != 'OUTER 5G')
+                    #Print('\t'+devip+' - New Label: Outer 5G')
+                    mmlScripts +='MOD DEVIP:CN='+cabNo[idx]+',SRN='+subNo[idx]+',SN='+slotNo[idx]+',SBT='+brdType[idx]+',PT='+portType[idx]+',PN='+portNo[idx]+',IP="'+devip+'",USERLABEL="Outer 5G"; {'+site+'}\n'
+                end
+            end
+        end
+    else
+        Print('\t!No DEVIPs defined!')
+    end
+    return mmlScripts
+end
+
+
+def getOmch()
+'''
+Get OMCH IP configuration
+'''
+    p=ParseMMLCMD("LST OMCH:;")
+    if (p == "error") 
+        Print ('\t'+ p)
+        return p
+    end
+    omchIp=GetColumnByName(p, 0, 'Local IP')[0]
+
+    return omchIp
+end
+
+
+def getIppath()
+'''
+Get IPPATH configuration
+'''
+    abisIp=''
+    iubIp=''
+
+    p=ParseMMLCMD("LST IPPATH:;")
+    if (p == "error") 
+        Print ('\t'+ p)
+        return p, p
+    end
+    locIp=GetColumnByName(p, 0, 'Local IP Address')
+    peerIp=GetColumnByName(p, 0, 'Peer IP Address')
+
+    for local in locIp
+        if locIp.count(local) == 4
+            iubIp=local
+        elif locIp.count(local) == 2
+            abisIp=local
+        end
+    end
+    return iubIp, abisIp
+end
+
+
+def getinner()
+    '''
+    Get Inner configuration
+    '''
+    inner4gosp = ''
+    inner4gvdf = ''
+    inner5gosp = ''
+    inner5gvdf = ''
+    inner4glabelosp = ["S1-OR", "S1-OSP"]
+    inner4glabelvdf = ["S1", "S1SERVIPID_0_OPID_0", "S1-VDF", "S1-VF"]
+    inner5glabelosp = ["S1 OSP 5G", "S1-OR_5G"]
+    inner5glabelvdf = ["S1 & X2", "S1 5G VDF", "S1 VDF 5G", "S1-VF_5G", "SA"]
+
+    p=ParseMMLCMD("LST USERPLANEHOST:;")
+    if (p == "error") 
+        Print ('\t'+ p)
+        return p, p, p, p
+    end
+    innerlist = GetColumnByName(p, 0, 'Local IP Address')
+    userlabel = GetColumnByName(p, 0, 'User Label')
+
+    for idx,inner in enumerate(innerlist)
+        if (userlabel[idx] in inner4glabelosp)
+            inner4gosp = inner
+        elif (userlabel[idx] in inner4glabelvdf)
+            inner4gvdf = inner
+        elif (userlabel[idx] in inner5glabelosp)
+            inner5gosp = inner
+        elif (userlabel[idx] in inner5glabelvdf)
+            inner5gvdf = inner
+        end
+    end
+
+    return inner4gosp, inner4gvdf, inner5gosp, inner5gvdf
+end
+
+
+def getvlanclass()
+
+    '''
+    Get VLAN configuration
+    '''
+    groupid4g = ''
+    groupid5g = ''
+    vlanclass4G = ["912", "915"]
+	vlanclass5G = ["918", "920"]
+ 
+    p=ParseMMLCMD("LST VLANCLASS:;")
+    if (p == "error") 
+        Print ('\t'+ p)
+        return p, p
+    end
+    groupidlist = GetColumnByName(p, 0, 'VLAN Group No.')
+    vlan = GetColumnByName(p, 0, 'VLAN ID')
+ 
+    for idx,groupid in enumerate(groupidlist)
+        if (vlan[idx] in vlanclass4G)
+            groupid4g = groupid
+        elif (vlan[idx] in vlanclass5G)
+            groupid5g = groupid
+        end
+    end
+ 
+    return groupid4g, groupid5g
+end
+
+
+def getvlanmap()
+    '''
+    Get VLAN configuration
+    '''
+ 
+    groupid4g, groupid5g = getvlanclass()
+    vlanmap4g = ''
+	vlanmap5g = ''
+ 
+    p=ParseMMLCMD("LST VLANMAP:;")
+    if (p == "error") 
+        Print ('\t'+ p)
+        return p, p
+    end
+    groupidlist = GetColumnByName(p, 0, 'VLAN Group No.')
+    nexthoplist = GetColumnByName(p, 0, 'Next Hop IP')
+ 
+    for idx,nexthopip in enumerate(nexthoplist)
+        if (groupidlist[idx] == groupid4g)
+			vlanmap4g = nexthopip
+		elif (groupidlist[idx] == groupid5g)
+			vlanmap5g = nexthopip
+		end
+    end
+
+    return vlanmap4g, vlanmap5g
+
+end
+
+
+def ip_to_int(ip)
+    """Convert a dotted-decimal IP address to a 32-bit integer."""
+        
+        octets = [int(octet) for octet in ip.split('.')]
+    return (octets[0] << 24) + (octets[1] << 16) + (octets[2] << 8) + octets[3]
+end
+
+
+def calculate_subnet_mask(bits)
+    """Convert CIDR bits to a subnet mask as a 32-bit integer."""
+    
+    return (1 << 32) - (1 << (32 - int(bits)))
+end
+
+
+def mask_to_int(mask)
+    """
+    Converte a máscara de sub-rede para um inteiro de 32 bits.
+    Aceita máscara no formato decimal pontuado (ex.: '255.255.255.240') ou CIDR (ex.: 28).
+    """
+    
+    if '.' in str(mask)  # Presença de '.' indica máscara decimal pontuada
+        return ip_to_int(mask)
+    else  # Assume formato CIDR
+        bits = int(mask)
+        return (1 << 32) - (1 << (32 - bits))
+    end
+end
+
+
+def is_ip_in_subnet(ip_address, network_ip, subnet_mask)
+    # Converter IPs e máscara para inteiros
+    
+    ip_int = ip_to_int(ip_address)
+    network_int = ip_to_int(network_ip)
+    subnet_mask_int = mask_to_int(subnet_mask)
+
+    # Verificar se o IP está na mesma rede
+    return (ip_int & subnet_mask_int) == (network_int & subnet_mask_int)
+end
+
+
+def CreateReport(data, oss)
+    path=GetOutputPath()+"//"+"NTP_Script_Report_"+StrfTime("%d%b%Y%H%M",LocalTime())+'_'+oss+'.xls'
+
+    NewReport()    
+    
+    style1 = ReportStyle(Orange)
+    style2 = ReportStyle(Light_Green)
+    style3 = ReportStyle(Gold)
+    style4 = ReportStyle(Yellow)    
+
+    header=[['NE Name', 'NE Type', 'Current NTP', 'NTP Status', 'All Configured NTPs']]
+    ex1 = Selector(":$1 == 'NE is Disconnected'", style1, ROW_MODE)
+
+    Create_Sheet("Overview",header, data,[ex1])
+
+    SaveReportAs(path)    
+    return path
+end
+
+
+def Create_Sheet(sheet_name,sIddata,data_report,marks)    
+    size=len(sIddata[0])
+    style1 = ReportStyle(Dark_Blue,'L',(0,10,39,1))
+    exTop = Selector("$0 != ''", style1 , ROW_MODE)
+    
+    condition_exp=[exTop]
+    if marks!=""
+        marks.extend(condition_exp)
+    else
+        marks=condition_exp
+    end
+    
+    sId = AddSheet(sheet_name)   
+    for col in range(size) 
+        ret = SetColumnWidth(sId, col, 2 ) 
+    end
+    
+    for data in data_report
+        sIddata.append(data)
+    end
+    
+    tId = AddTable(sId, len(sIddata), len(sIddata[0])) 
+    rId = AddRange(tId, 0, 0, 0, len(sIddata[0])-1 )
+
+    SetRangeBGColor(rId, Dark_Blue)    
+    SetRangeFont(rId, 0, size, 39, 1) 
+    SetTableValueEx(tId, sIddata,marks)
+
+end

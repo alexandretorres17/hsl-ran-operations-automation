@@ -1,0 +1,158 @@
+def Check_OSS()
+'''
+The deployment-specific IP-to-zone mapping was removed from this public archive.
+'''
+    return "EXAMPLE_ZONE"
+end 
+
+
+def Get_sites()
+'''
+Function to list existing 4G NEs on OSS (based on conditions)
+'''
+    nelist = GetNELst()
+    neList_final=list()
+
+   for ne in nelist
+        if not ne.startswith(("BSC","RNC"))
+            neList_final.append(ne)
+        end
+    end    
+    return neList_final
+end
+
+
+def Csv_to_array(csv_path)
+'''
+Function to list NEs in source CSV file
+'''
+    f = Open(csv_path) 
+    content = ReadCSVFile(f)
+    table=list(content)
+    f.close()
+    sitename=[""]*(len(table)-1)
+    for i in range(1,len(table))
+        sitename[i-1]=sitename[i-1]+table[i][0]
+    end
+    
+    site_list=list(set(sitename))
+    return site_list
+end
+
+
+def Entry_form(csv_path)
+    buttonList = ["Confirm", "Exit"]
+    formId = CreateForm(" Welcome to AutoVPN Script!", buttonList)
+    
+    Label(formId,200, " Please select NE list file:")
+    Enter(formId)
+    hEdit1 = FileChooser(formId, "csv")
+
+    Enter(formId)
+    caption = 'Select one of the following options: ' 
+    choices = ['Generate AutoVPN MML Scripts', 'Check IKE name', 'Check Cells & IKE Status']
+    hRadio1=RadioBoxGroup(formId, 200, choices, caption)
+
+    userSelect=ShowForm(formId)
+    csv_path = GetValue(hEdit1)
+    rbSelect=GetValue(hRadio1)
+    filepath=str(csv_path)[:str(csv_path).rfind('/')+1]
+    DeleteForm(formId)    
+    return csv_path,userSelect,rbSelect, filepath
+end
+
+
+def getIKE(rbSelect, site)
+'''
+Gather IKEPEER information via MML commands
+'''
+    ClearMMLBuffer()
+    
+    CMD=("LST IKEPEER:;")
+    aux=SendMML(CMD)
+    mml=GetMMLReport()
+    p=ParseMMLRpt(mml)
+    ike_name=GetColumnByName(p, 0, 'IKE Peer Name')
+    ike_remoteip=GetColumnByName(p, 0, 'Remote IP Address')
+    ike_remotename=GetColumnByName(p, 0, 'Remote Name')
+    ike_idtype=GetColumnByName(p, 0, 'Local ID Type')
+
+    ikeList=[] 
+
+    for idx,ike in enumerate(ike_remoteip)
+        if ike.startswith('192.0.2.') or ike.startswith('198.51.100.') or ike.startswith('203.0.113.')
+            if ike_idtype[idx] != 'Distinguished Name'      
+                ikeList.append(ike_name[idx])
+            end
+            if rbSelect == 0 or rbSelect == 1   
+                Print(site+'\t'+ike_name[idx]+'\t'+ike)
+            end
+            #ike_remotename=ike_remotename[idx]   
+        end
+    end
+
+    return ikeList
+end
+
+
+def getBoard()
+'''
+Function used to gather MPT cab/rack/slot location
+'''
+    ClearMMLBuffer()
+    
+    CMD=("LST DEVIP:;")
+    aux=SendMML(CMD)
+    mml=GetMMLReport()
+    p=ParseMMLRpt(mml)
+
+    cab=GetColumnByName(p, 0, 'Cabinet No.')[0]
+    srn=GetColumnByName(p, 0, 'Subrack No.')[0]
+    sn=GetColumnByName(p, 0, 'Slot No.')[0]
+
+    return cab,srn,sn
+end
+
+
+def getIKEStatus(ike_name)
+'''
+Function used to get IKE Tunnel status
+'''
+    cab,srn,sn = getBoard()
+
+    ClearMMLBuffer()
+    
+    CMD=("DSP IKESA:CN="+cab+",SRN="+srn+",SN="+sn+",IKEVSN=IKE_V2,DSPMODE=VERBOSE,IKEPNM=\""+ike_name+"\",PHASE=PHASE2;")
+    aux=SendMML(CMD)
+    mml=GetMMLReport()
+    p=ParseMMLRpt(mml)
+
+    ike_state=GetColumnByName(p, 0, 'State')
+
+    if ike_state
+        return ike_state[0]
+    else
+        return 'DOWN'
+    end
+end
+
+
+def getCellStatus(site)
+'''
+Get cell status
+'''
+    ClearMMLBuffer()
+    
+    CMD=("DSP CELL:;")
+    aux=SendMML(CMD)
+    mml=GetMMLReport()
+    p=ParseMMLRpt(mml)
+    locellid=GetColumnByName(p, 0, 'Local Cell ID')
+    cellname=GetColumnByName(p, 0, 'Cell Name')
+    cellstate=GetColumnByName(p, 0, 'Cell instance state')
+    setuptime=GetColumnByName(p, 0, 'Cell latest setup time')
+
+    for idx,cellid in enumerate(locellid)
+        Print(site+'\t'+cellname[idx]+'\t'+cellid+'\t'+cellstate[idx]+'\t'+setuptime[idx])
+    end
+end

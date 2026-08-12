@@ -1,0 +1,137 @@
+########################################################
+#### OSS Check ####
+########################################################
+def Check_OSS()
+'''
+The deployment-specific IP-to-zone mapping was removed from this public archive.
+'''
+    return "EXAMPLE_ZONE"
+end
+
+
+########################################################
+#### Send MML Commands ####
+########################################################
+def getColsToRows(p, obj=0, attridxs="")
+    cols = []
+    #Get specified row of the MML report  
+    row = GetRecordNum(p,obj)
+    col = GetAttrNum(p, obj) + 1
+    for i in range(row)
+        onecol = []
+        for j in attridxs
+            value = GetAttrValueByName(p, obj, j, i)
+            onecol.append(value)
+        end
+        cols.append(onecol)
+    end
+    return cols
+end
+
+
+
+def sendmmlcommand(command: str, select_from_column=0, *column_names: str, arrayByRow=1, entry=0) -> str
+    ClearMMLBuffer()
+    sendmml = SendMML(command)
+    rpt = GetMMLReport(0)
+    p = ParseMMLRpt(rpt)
+    getresult = GetResultCause(p)
+    col = []
+    if select_from_column == 1
+        if arrayByRow == 0
+            for name in column_names
+                col.append(GetColumnByName(p, entry, name))
+             end
+        else
+            col = getColsToRows(p, entry, column_names)
+        end
+        return p, rpt, getresult, col
+    end
+    return p, rpt, getresult
+end
+
+########################################################
+#### get bord type and update list ####
+########################################################
+def get_brd_info(listBRD)
+    for brd in listBRD
+        p_lst_brd, rpt_lst_brd, getresult_lst_brd, brd_type = sendmmlcommand('DSP BRDMFRINFO:CN={},SRN={},SN={};'.format(brd[0],brd[1],brd[2]), 1, 'Type')
+        if 'succee' in getresult_lst_brd
+            brd.append(brd_type[0].pop()[-6:])
+        else
+            brd.append("NULL")
+        end
+    end
+end
+
+########################################################
+#### bbp alocation ####
+########################################################
+def bbp_alocation(array, indexVal)
+    array_filter = []
+    for i in array
+        if i[indexVal] not in array_filter
+            array_filter.append(i[indexVal])
+        end
+    end
+    return array_filter
+end
+
+########################################################
+#### bbp cell count ####
+########################################################
+
+def checkbbpcellcount(bbp_brd_list,ul_bbp_output,BBP_Config)
+    cellnum = len(ul_bbp_output)
+    bbpcellcap = 0
+    for bbp in bbp_brd_list
+        # Print(bbp)
+        if bbp[4] == 'Normal' and bbp[7] != 'NULL'
+            bbpcellcap = bbpcellcap + BBP_Config[bbp[7].upper()]
+        end
+    end
+    if bbpcellcap > cellnum
+        for bbp in bbp_brd_list
+            if bbp[4] == 'Normal'
+                bbp[4] = 'To be reconfigured'
+            end
+        end
+    end
+end
+
+########################################################
+#### bbp not in use ####
+########################################################
+
+def checkBBPinUsed(listBBP, RRUChain, bbp_ul, bbp_dl)
+    for bbp_entry in listBBP
+        if bbp_entry[4] == 'Normal'
+            bbp_location = bbp_entry[:3]
+            if bbp_location not in [x[:3] for x in RRUChain]
+                found = False
+                for baseband_entry in bbp_ul + bbp_dl
+                    if bbp_location in [x[:3] for x in baseband_entry[1]]
+                        found = True
+                        break
+                    end
+                end
+                if not found
+                    bbp_entry[4] = 'To be powered off'
+                    bbp_entry.append("OPR BRDPWR:CN={},SRN={},SN={},SW=OFF,FOCPWROFF=YES; {{{}}}".format(bbp_entry[0], bbp_entry[1], bbp_entry[2], bbp_entry[5]))
+                else
+                    bbp_entry.append("")
+                end
+                else
+                bbp_entry.append("")
+            end
+        else
+            bbp_entry.append("")
+        end
+    end
+end
+
+
+def write_to_csv(file, message)
+    f = Open(GetOutputPath() + "//" + file , 'w')  
+    WriteCSVFile(f, message) 
+end

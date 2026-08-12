@@ -1,0 +1,364 @@
+#encoding=utf-8
+def Main()
+	Print("================================================================")
+	Print(" ALM - 26262 External Clock Reference Problem ")
+    Print(" This script will chek CLK PLL Status  ")
+    Print(" Manual (IPCLOCK to SYNCHETH)				  	    	V.4.0 "  )
+	Print("================================================================\n")
+	
+ 	form = CreateForm("CLKSTATUS check/Correct",["Confirm", "Cancel"])   
+	Label(form,250, "Site Name List. [Format: SITE_EXAMPLE SITE_EXAMPLE ]")
+	hEdit4 = Edit(form, 150)
+    Enter(form)
+#    file_dir = FileChooser(form, 'txt')
+    option_button = ShowForm(form)
+    if(option_button == "Cancel")
+        Print("Operation canceled.")
+        DeleteForm(form)
+        return
+    end
+
+	NE_list_all = []
+	NE_list_SyncEth = []
+	NE_list_IPCLK = []
+	NE_list_GPS = []
+	NE_list_unknown = []
+	NE_list_tx = []    
+	NE_list = GetValue(hEdit4).split(" ")
+
+	for ne in NE_list
+		Print("=====================")
+		Print("Connect to: %s"%ne)
+#		Print("=====================")
+		
+		#Connect the NE.
+		ConnectNE(ne)
+		ret = ConnectNE(ne)
+		if ret == 0
+			Print('Failed to connect to %s.'%ne)
+			Print("\n")
+		end
+
+# ------------------------------------------------------------
+
+# Parse MML command Special
+def ParseMMLCMD(ne,command,x)    # x // -1 last report
+    if(ConnectNE(ne) != 0)
+        ClearMMLBuffer()
+        sendMML = SendMML(command)
+        mml = GetMMLReport(x)
+        # Parse the MML message.
+        p = ParseMMLRpt(mml)
+        return p, mml
+    else
+        p = "OM"
+        mml = "OM"
+        return p, mml
+    end
+end
+
+# Attempt to fix Clock	
+def Clock_fix()
+	# DEVIP to know wish Port is Tx
+	p_devip, mml_devip = ParseMMLCMD(ne,"LST DEVIP:;",-1)
+	reg_DEVIP = GetRecordNum(p_devip, 0)	# Total of DEVIP entries in MML
+#	Print (reg_DEVIP)
+	port_no_02_tot = int(0)
+	port_no_13_tot = int(0)
+
+	# Check DEVIP Port No. for Tx
+	for x in range(0,reg_DEVIP)
+		DEVIP_port = int(GetAttrValueByName(p_devip,0,"Port No.",x))
+		if DEVIP_port == 0 or DEVIP_port == 2			# checks Eletric and counts
+			port_no_02 = DEVIP_port
+			port_no_02_tot = port_no_02_tot + int(1)		# counts
+#			Print ("Port_no_02: %s"%port_no_02+" Port_no_02_tot: %s"%port_no_02_tot)
+		end
+		if DEVIP_port == 1 or DEVIP_port == 3			# checks Optic and counts
+			port_no_13 = DEVIP_port
+			port_no_13_tot = port_no_13_tot + int(1)		# counts
+#			Print ("Port_no_13: %s"%port_no_13+" Port_no_13_tot: %s"%port_no_13_tot)
+		end
+	end
+	if port_no_02_tot > port_no_13_tot				# ...is Eletric
+		Print ("... DEVIP Port is: %s"%port_no_02)
+		Port_new = port_no_02			# store for later, to change SYNCETH Port
+		tx_port_check = port_no_02
+	elif port_no_02_tot < port_no_13_tot			# ...is Optic
+		Print ("... DEVIP Port is: %s"%port_no_13)
+		Port_new = port_no_13			# store for later, to change SYNCETH Port
+		tx_port_check = port_no_13
+	elif port_no_02_tot == port_no_13_tot			# ...is unknown
+		Print ("... Unable to determine Port")
+		Port_new = port_no_13			# store for later, to change SYNCETH Port
+		tx_port_check = int(99)			# No port was determined
+		if ne not in NE_list_unknown
+			NE_list_unknown.append(ne)
+		end
+	end
+
+	# Check configured SynchETH port with DEVIP port in tx
+	p_synch, mml_synch = ParseMMLCMD(ne,"LST SYNCETH:;",-1)
+	msg4 = "No matching result is found"
+	if msg4 not in mml_synch and tx_port_check != int(99)
+		SynchETH_config = int(GetAttrValueByName(p_synch,0,"Port No.",0))	# Store Configured Port No.
+		Print ("... SYNCETH Port is %s"%SynchETH_config)
+
+	# Check config Port with Tx
+		if SynchETH_config != tx_port_check								# Change SYNCETH Port
+			Print ("... Problem: Port inconsistency, change SYNCETH Port !")
+#			Print ("MML = SET CLKMODE:MODE=FREE;")
+			sendmml=SendMML("SET CLKMODE:MODE=FREE;")
+			Print ("... Reconfiguring SYNCHETH")
+#			Print ("MML = RMV SYNCETH:;")
+			sendmml=SendMML("RMV SYNCETH:;")
+#			Print ("MML = ADD SYNCETH:LN=0,SRN=%s"%Subrack_new+",SN=%s"%Slot_new+",PN=%s"%Port_new+";")
+			sendmml=SendMML("ADD SYNCETH:LN=0,SRN=%s"%Subrack_new+",SN=%s"%Slot_new+",PN=%s"%Port_new+";")
+#			Print ("MML = SET CLKMODE:MODE=MANUAL,CLKSRC=SYNCETH;")
+			sendmml=SendMML("SET CLKMODE:MODE=MANUAL,CLKSRC=SYNCETH;")
+			sendmml=SendMML("SET CLKTHD:SRN=%s"%Subrack_new+",SN=%s"%Slot_new+",FREQOFFSETEXCEEDPOLICY=DISPOSABLE;")	# Not sure if is suitable, anyway... (only R18 onwards)
+			NE_list_SyncEth.append(ne)
+			NE_list_IPCLK.append(ne)
+		elif SynchETH_config == tx_port_check							# Reaquire FREQ Capture Center & Current DA
+			Print ("... CHECK_1 : SYNCHETH is correct with DEVIP")
+#			synceth_fix()									# Goto Synch_ETH fix routine (removed)
+			Print ("... Restarting SYCHETH FREQ Capture again...")
+#			Print ("MML = SET CLKMODE:MODE=FREE;")
+			sendmml=SendMML("SET CLKMODE:MODE=FREE;")
+#			Print ("MML = SET CLKMODE:MODE=MANUAL,CLKSRC=SYNCETH;")
+			sendmml=SendMML("SET CLKMODE:MODE=MANUAL,CLKSRC=SYNCETH;")
+			sendmml=SendMML("SET CLKTHD:SRN=%s"%Subrack_new+",SN=%s"%Slot_new+",FREQOFFSETEXCEEDPOLICY=DISPOSABLE;")	# Not sure if is suitable, anyway... (only R18 onwards)
+			NE_list_SyncEth.append(ne)
+		end
+	elif msg4 in mml_synch													# SYNCH ETH is not configured! Configuring ...
+		Print ("... Problem: no SYNCHETH configured!")
+		Print ("... Configuring SYNCHETH")
+#		Print ("MML = ADD SYNCETH:LN=0,SRN=%s"%Subrack_new+",SN=%s"%Slot_new+",PN=%s"%Port_new+";")
+		sendmml=SendMML("ADD SYNCETH:LN=0,SRN=%s"%Subrack_new+",SN=%s"%Slot_new+",PN=%s"%Port_new+";")
+		Print ("... Restarting FREQ Capture ...")
+#		Print ("MML = SET CLKMODE:MODE=FREE;")
+		sendmml=SendMML("SET CLKMODE:MODE=FREE;")
+#		Print ("MML = SET CLKMODE:MODE=MANUAL,CLKSRC=SYNCETH;")
+		sendmml=SendMML("SET CLKMODE:MODE=MANUAL,CLKSRC=SYNCETH;")
+		sendmml=SendMML("SET CLKTHD:SRN=%s"%Subrack_new+",SN=%s"%Slot_new+",FREQOFFSETEXCEEDPOLICY=DISPOSABLE;")	# Not sure if is suitable, anyway... (only R18 onwards)
+		p_dspclk, mml_dspclk = ParseMMLCMD(ne,"DSP CLKSRC:;",-1)
+		Clk_Src_stat = GetAttrValueByName(p_dspclk,0,"License Authorized",0)
+		if "Forbid" in mml_dspclk
+			NE_list_IPCLK.append(ne)
+		end
+		NE_list_SyncEth.append(ne)
+	end
+end
+
+# Clock Check
+def Clock_chk()
+	PLL_Stat = GetAttrValueByName(p_clkst,0,"PLL Status",0)
+	Clk_state = GetAttrValueByName(p_clkst,0,"Current Clock Source State",0)
+#	if Clk_state == "Lost" or Clk_state == "Unknown"
+	if Clk_state == "Unknown"
+		Print("... Clock issue - Clock is ""LOST"" or ""Unkwown")
+		NE_list_unknown.append(ne)
+	end
+#	if (PLL_Stat == "Free running" or PLL_Stat == "Holdover") and (Clk_state != "Lost") and (Clk_state != "Unknown")
+	#if (PLL_Stat == "Free running" or PLL_Stat == "Holdover")
+	if (PLL_Stat == "Free running" or PLL_Stat == "Holdover" or PLL_Stat == "Locked")
+		Print("Clock needs fixing! in "+ne)
+		NE_list_all.append(ne)
+		Print (GetAttrValueByName(p_clkst,0,"PLL Status",0))     # content of PLL Status
+        Print ("... Attempting to troubleshoot")
+        ClearMMLBuffer()
+		p_clksrc, mml_clksrc = ParseMMLCMD(ne,"DSP CLKSRC:;",-1)
+		reg_CLK = GetRecordNum(p_clksrc, 0)	# Total of CLK entries in MML
+#		Print (reg_CLK)
+		if reg_CLK != 1					# n. of CLK entries > 1
+#			Print("reg > 1")
+
+			# Check CLK Active or Deactivated
+			src_count = int(0)			# Check for SYNCHETH + IPCLK + ...
+			for x in range(0,reg_CLK)
+				CLK_Src = GetAttrValueByName(p_clksrc,0,"Clock Source Type",x) 	# to check Clock Source content is SynchETH or IPCLK
+				if CLK_Src == "SyncEth Clock"
+					CLK_Active_s = GetAttrValueByName(p_clksrc,0,"Clock Source Active State",x)		# to check SYNCHETH content is Activated
+					CLK_Available_s = GetAttrValueByName(p_clksrc,0,"Clock Source State",x)		# to check SYNCHETH State (Available/Unavailable)
+					Clk_Src_stat = GetAttrValueByName(p_clksrc,0,"License Authorized",x)
+					if CLK_Available_s == "Available"
+						src_count = src_count + int(1)
+						Print ("... Clock available is: %s"%CLK_Src)
+#						Print ("License? : %s"%Clk_Src_stat)
+						if Clk_Src_stat != "Allow"
+							NE_list_IPCLK.append(ne)
+						end
+#						Clock_fix() 					# GOTO Clock Fix routine
+					else
+						continue
+					end
+				elif CLK_Src == "IP Clock"
+					CLK_Active_i = GetAttrValueByName(p_clksrc,0,"Clock Source Active State",x)		# to check IPCLK content is Activated
+					CLK_Available_i = GetAttrValueByName(p_clksrc,0,"Clock Source State",x)		# to check IPCLK State (Available/Unavailable)
+					if CLK_Active_i == "Activated" #and CLK_Available_i == "Unavailable" 
+						src_count = src_count + int(2)
+						Print ("... Clock activated is: %s"%CLK_Src)
+#						Clock_fix() 					# GOTO Clock Fix routine
+					else
+						continue
+					end
+				elif CLK_Src == "Line Clock"		# Clock Source Type is LINE_CLK ?
+					CLK_Active_l = GetAttrValueByName(p_clksrc,0,"Clock Source Active State",x)		# to check IPCLK content is Activated
+					CLK_Available_l = GetAttrValueByName(p_clksrc,0,"Clock Source State",x)		# to check IPCLK State (Available/Unavailable)
+					if CLK_Active_l == "Activated" and CLK_Available_l == "Unavailable"
+						p_lineclk, mml_lineclk = ParseMMLCMD(ne,"DSP CPBEARER:;",-1)		# Check if is ATM
+						msg5 = "SCTPLNK"
+						if msg5 in mml_lineclk
+							src_count = src_count + int(4)
+							Print ("... Clock activated is: %s"%CLK_Src)
+						end
+						if ne not in NE_list_IPCLK
+							NE_list_IPCLK.append(ne)
+						end
+					else
+						continue
+					end
+				elif CLK_Src == "GNSS Clock"
+					CLK_Active_g = GetAttrValueByName(p_clksrc,0,"Clock Source Active State",x)		# to check GPS content is Activated
+					CLK_Available_g = GetAttrValueByName(p_clksrc,0,"Clock Source State",x)		# to check GNSS Clock State (Available/Unavailable)
+					if CLK_Active_g == "Activated" and CLK_Available_g == "Unavailable" 
+						src_count = src_count + int(8)
+						Print ("... Problem: GPS!")
+						p_gnssfreq, mml_gnssfreq = ParseMMLCMD(ne,"DSP CLKSTAT:SRN=%s"%Subrack_new+",SN=%s"%Slot_new+";",-1)
+						freq = GetAttrValueByName(p_gnssfreq,0,"Clock Synchronization Mode",0)		# Check if is TIME or FREQ
+						if freq == "FREQ"
+							Print ("... Set GNNSS to TIME!")
+							sendmml=SendMML("SET CLKSYNCMODE:CLKSYNCMODE=TIME;")
+						end
+						if ne not in NE_list_GPS
+							NE_list_GPS.append(ne)
+						end
+					else
+						continue
+					end
+				else
+					src_count = int(16)
+					Print("... Unknown Clock issue")
+					if ne not in NE_list_unknown
+						NE_list_unknown.append(ne)
+					end
+				end
+			end
+#			Print("src_count: %s"%src_count)
+#			if src_count == 3 or src_count == 5				# (SYNCHETH 1, IPCK 2, LINECLK 4, GNSSCLK 8, ELSE 16)
+			if src_count < 6								# (SYNCHETH 1, IPCK 2, LINECLK 4, GNSSCLK 8, ELSE 16)
+#				Print ("GOTO Clk_fix routine! SyncEth/IPCLK/LINECLK - %s"%src_count)
+				Clock_fix()
+			elif src_count == 0								# (SYNCHETH 1, IPCK 2, LINECLK 4, GNSSCLK 8, ELSE 16)
+				if ne not in NE_list_unknown
+					NE_list_unknown.append(ne)
+				end
+			end
+
+		elif reg_CLK == 1				# n. of CLK entries = 1
+#			Print ("reg = 1")
+			check = GetAttrValueByName(p_clksrc,0,"Clock Source Type",0)
+			if check == "SyncEth Clock"		# Clock Source Type is SyncEth Clock ?
+				Print ("... checking SyncEth Clock for errors")
+				Clock_fix() 					# GOTO Clock Fix routine
+			elif check == "Line Clock"		# Clock Source Type is LINE_CLK ?
+				Print ("... Problem: Line Clock!")	
+				p_lineclk, mml_lineclk = ParseMMLCMD(ne,"DSP CPBEARER:;",-1)		# Check if is ATM
+				msg5 = "SCTPLNK"
+				if msg5 in mml_lineclk
+					Clock_fix() 					# GOTO Clock Fix routine
+				else
+					Print ("... Node is ATM!")
+				end
+			elif check == "GNSS Clock"		# Clock Source Type is GPS ?
+				Print ("... Problem: GPS!")	
+				p_gnssfreq, mml_gnssfreq = ParseMMLCMD(ne,"DSP CLKSTAT:SRN=%s"%Subrack_new+",SN=%s"%Slot_new+";",-1)		# Check if is ATM
+				freq = GetAttrValueByName(p_gnssfreq,0,"Clock Synchronization Mode",0)
+				if freq == "FREQ"
+					Print ("... Set GNNSS to TIME!")
+					sendmml=SendMML("SET CLKSYNCMODE:CLKSYNCMODE=TIME;")
+				end
+				NE_list_GPS.append(ne)				
+			elif check != "SyncEth Clock" or check != "GNSS Clock"		# Clock Source Type is not GPS or SynchETH ?
+				Print ("... Unable to correct, pls ckeck node Clock Config manualy  :(")	
+				if ne not in NE_list_unknown
+					NE_list_unknown.append(ne)
+				end
+			end
+		end
+
+    else
+		Print ("Clock Locked")
+        return
+    end
+end
+
+# Main code (cont.)
+		if ret == 1
+			# Parsing MML "CLKSTATUS" 
+	        # RETCODE="806487378  The board is not configured."
+			# checking Subrack...
+			# Subrack 0:0:7
+			p_clkst, mml_clkst = ParseMMLCMD(ne,"DSP CLKSTAT:SRN=0,SN=7;",-1)
+			RETCODE = int(GetResultCode(p_clkst))
+			if RETCODE == 0
+				Subrack_new = 0			# store for later, to change SYNCETH Port
+				Slot_new = 7			# store for later, to change SYNCETH Port
+				Clock_chk()				# GOTO Clock Check routine
+			# Subrack 0:1:7
+			elif RETCODE != 0
+				ClearMMLBuffer()
+				p_clkst, mml_clkst = ParseMMLCMD(ne,"DSP CLKSTAT:SRN=1,SN=7;",-1)
+				RETCODE = int(GetResultCode(p_clkst))
+				if RETCODE == 0
+					Subrack_new = 1			# store for later, to change SYNCETH Port
+					Slot_new = 7			# store for later, to change SYNCETH Port
+					Clock_chk()				# GOTO Clock Check routine
+				# Subrack 0:0:6
+				elif RETCODE != 0
+					ClearMMLBuffer()
+					p_clkst, mml_clkst = ParseMMLCMD(ne,"DSP CLKSTAT:SRN=0,SN=6;",-1)
+					RETCODE = int(GetResultCode(p_clkst))
+					if RETCODE == 0
+						Subrack_new = 0			# store for later, to change SYNCETH Port
+						Slot_new = 6			# store for later, to change SYNCETH Port
+						Clock_chk()				# GOTO Clock Check routine
+					# Subrack 0:1:6
+					elif RETCODE != 0
+						ClearMMLBuffer()
+						p_clkst, mml_clkst = ParseMMLCMD(ne,"DSP CLKSTAT:SRN=1,SN=6;",-1)
+						RETCODE = int(GetResultCode(p_clkst))
+						if RETCODE == 0
+							Subrack_new = 1			# store for later, to change SYNCETH Port
+							Slot_new = 6			# store for later, to change SYNCETH Port
+							Clock_chk()				# GOTO Clock Check routine
+						end
+					else
+						continue
+					end
+				end	
+			ClearMMLBuffer()
+			end
+		end
+	end
+
+	Print("  ")
+#	Print("Total of: %s"%len(NE_list_all))
+	Print("Report")
+	Print("--------------")
+    Print("Total of %s"%len(NE_list_all)+" NEs checked: %s"%NE_list_all)
+	Print("Actions taken:")
+    Print("- %s"%len(NE_list_SyncEth)+" NEs with SychEth problems: %s"%NE_list_SyncEth)
+	Print("  ... Corrected for incorrect Port.")
+	Print("- %s"%len(NE_list_IPCLK)+" NEs with CLK problems: %s"%NE_list_IPCLK)
+	Print("  ... Added SynchETH, please distribute SynchETH License for these nodes")
+	Print("- %s"%len(NE_list_GPS)+" NEs with GPS problems: %s"%NE_list_GPS)
+	Print("  ... Check GPS/GNSS Config and/or replace GPS.")
+	Print("- %s"%len(NE_list_tx)+" NEs with Tx problesm: %s"%NE_list_tx)
+	Print("  ... Check with TNO.")	
+	Print("- %s"%len(NE_list_unknown)+" NEs with Unknown problems: %s"%NE_list_unknown)
+	Print("  ... Check Manually.")
+	Print("  ---> FINISHED ")
+end
+	
+Main()

@@ -1,0 +1,57 @@
+def Check_OSS()
+'''
+The deployment-specific IP-to-zone mapping was removed from this public archive.
+'''
+    return "EXAMPLE_ZONE"
+end 
+
+def Entry_form(csv_path)
+    buttonList = ["Confirm", "Exit"]
+    formId = CreateForm(" Welcome to 2G Migration Script!", buttonList)
+    
+    Label(formId,200, " Please select NE list file:")
+    Enter(formId)
+    hEdit1 = FileChooser(formId, "csv")
+
+    userSelect=ShowForm(formId)
+    csv_path = GetValue(hEdit1)
+    filepath=str(csv_path)[:str(csv_path).rfind('/')+1]
+    DeleteForm(formId)    
+    return csv_path,userSelect, filepath
+end
+
+def Csv_to_array(csv_path)
+'''
+Function to list NEs in source CSV file
+'''
+    ne_list=[]
+    f = Open(csv_path) 
+    content = ReadCSVFile(f)
+    f.close()
+    for row in content[1:] 
+        ne_list.append([row[0], row[1], row[2]])
+    end 
+
+    return ne_list,content[1:]
+end
+
+def ParseMMLCMD(command, ne)
+'''
+Function to parse MML commands
+'''
+    ClearMMLBuffer()
+    sendMML = SendMML(command)
+        
+    if sendMML==1
+        mml = GetMMLReport(-1)
+    else
+        Print("Command: " + command + " failed on NE: " + ne)
+        p = "error"
+        return p
+    end
+
+    # Parse the MML message.
+    p = ParseMMLRpt(mml)
+    
+    return p
+end

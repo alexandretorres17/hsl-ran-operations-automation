@@ -1,0 +1,111 @@
+Functions = Import('Functions.hsl3') 
+
+OSS = ''
+OSS = Functions.Check_OSS()
+csv_content = [['cabinet', 'subrack', 'slot', 'bbp', 'status' , 'site', 'OSS','bbp_type','MML','Date']]
+
+BBP_Config = {"WBBPA": 3, "WBBPB1": 3, "WBBPB2": 3, "WBBPB3": 6, "WBBPB4": 6, "WBBPD1": 6, "WBBPD2": 6, "WBBPD3": 6, "WBBPF1": 6, "WBBPF2": 6, "WBBPF3": 6, "WBBPF4": 6, "WBBPF5": 6, "WBBPF6": 6, "UBBPD1": 6, "UBBPD2": 6, "UBBPD3": 6, "UBBPD4": 6, "UBBPD5": 6, "UBBPD6": 12, "UBBPE1": 6, "UBBPE2": 6, "UBBPE3": 12, "UBBPE4": 12, "UBBPE5": 12, "UBBPE6": 12, "UBBPEI": 12, "BBPE18": 12, "UBBPG1": 12, "BBPG1A": 12, "UBBPG2": 12, "BBPG2A": 12, "UBBPG3B": 12, "UBBPG3": 12 }
+
+BBU_List_To_Remove = []
+neList = GetNELstByType("BTS3900 WCDMA")
+neList += GetNELstByType("BTS5900 WCDMA")
+# neList = ['SITE_EXAMPLE', 'SITE_EXAMPLE']
+
+total_list = []
+for site in neList
+    # Print("Testar site: " + serafim)
+    valida = ConnectNE(site)
+
+    if valida == 1
+        p_lst_brd, rpt_lst_brd, getresult_lst_brd, brd_ports = Functions.sendmmlcommand('DSP BRD:;', 1, 'Cabinet No.', 'Subrack No.', 'Slot No.', 'Config Type', 'Availability Status')
+        i=0
+        bbpnormal=0
+        bbp_brd_list=[]
+        for u in brd_ports
+            # Print(u[3])
+            
+            if 'BBP' in str(u[3])
+                u.append(site)
+                u.append(OSS)
+                bbp_brd_list.append(u)
+                
+                if 'Normal' in u[4]
+                    bbpnormal = bbpnormal+1
+                end
+            end
+            i = i+1
+        end
+
+        # Print("BBP list: " + str(bbp_brd_list))
+        Functions.get_brd_info(bbp_brd_list)
+
+        if bbpnormal > 1
+
+            p_lst_ulocell, rpt_lst_ulocell, getresult_lst_ulocell, bbp_ulocell = Functions.sendmmlcommand('LST ULOCELL:MODE=ALLLOCALCELL;', 1, 'UL Baseband Equipment ID', 'DL Baseband Equipment ID', 'Local Cell ID', arrayByRow=1, entry=0)
+            # Print("UL/DL baseband Ulocell: " + str(bbp_ulocell))
+            ul_bbp_output = Functions.bbp_alocation(bbp_ulocell, 0)
+            dl_bbp_output = Functions.bbp_alocation(bbp_ulocell, 1)
+            
+            total_bbp_ul = []
+            for i in ul_bbp_output
+                p_lst_ul_bbp, rpt_lst_ul_bbp, getresult_lst_ul_bbp, bbp_ul_bbp = Functions.sendmmlcommand('LST BASEBANDEQM:BASEBANDEQMID={},BASEBANDEQMTYPE=UL;'.format(i), 1, 'Cabinet No.', 'Subrack No.', 'Slot No.', arrayByRow=1, entry=1)
+                if "No matching result is found" in rpt_lst_ul_bbp
+                    p_lst_ul_bbp, rpt_lst_ul_bbp, getresult_lst_ul_bbp, bbp_ul_bbp = Functions.sendmmlcommand('LST BASEBANDEQM:BASEBANDEQMID={},BASEBANDEQMTYPE=ULDL;'.format(i), 1, 'Cabinet No.', 'Subrack No.', 'Slot No.', arrayByRow=1, entry=1)
+                end
+                total_bbp_ul.append([i,bbp_ul_bbp])
+            end
+            # Print('UL Baseband eqm: '+str(total_bbp_ul))
+
+            total_bbp_dl = []
+            for i in dl_bbp_output
+                p_lst_dl_bbp, rpt_lst_dl_bbp, getresult_lst_dl_bbp, bbp_dl_bbp = Functions.sendmmlcommand('LST BASEBANDEQM:BASEBANDEQMID={},BASEBANDEQMTYPE=DL;'.format(i), 1, 'Cabinet No.', 'Subrack No.', 'Slot No.', arrayByRow=1, entry=1)
+                if "No matching result is found" in rpt_lst_dl_bbp
+                    p_lst_dl_bbp, rpt_lst_dl_bbp, getresult_lst_dl_bbp, bbp_dl_bbp = Functions.sendmmlcommand('LST BASEBANDEQM:BASEBANDEQMID={},BASEBANDEQMTYPE=ULDL;'.format(i), 1, 'Cabinet No.', 'Subrack No.', 'Slot No.', arrayByRow=1, entry=1)
+
+                end
+                total_bbp_dl.append([i,bbp_dl_bbp])
+            end
+            # Print('DL Baseband eqm:'+str(total_bbp_dl))
+
+            p_lst_rruchain, rpt_lst_rruchain, getresult_lst_rruchain, bbp_rruchain = Functions.sendmmlcommand('LST RRUCHAIN:;', 1, 'Head Cabinet No.', 'Head Subrack No.', 'Head Slot No.', 'Tail Cabinet No.', 'Tail Subrack No.', 'Tail Slot No.', arrayByRow=1, entry=0)
+            
+            rruchain_boards = []
+            for rru in bbp_rruchain
+                rruhead = rru[:3]
+                rrutail = rru[-3:]
+                if rruhead not in rruchain_boards 
+                    rruchain_boards.append(rruhead)
+                end
+                if "NULL" not in rrutail and rrutail not in rruchain_boards
+                    rruchain_boards.append(rrutail)
+                end
+            end
+            # Print('BBU slots used in RRUCHAIN: '+str(rruchain_boards))
+            Functions.checkBBPinUsed(bbp_brd_list, rruchain_boards, total_bbp_ul, total_bbp_dl)
+            
+            # Perform cell evaluation
+            Functions.checkbbpcellcount(bbp_brd_list,bbp_ulocell,BBP_Config)
+        elif bbpnormal == 1
+            # O loop é porque pode haver mais no estado unconfigured mas só uma activa
+            for bbp in bbp_brd_list
+                bbp.append("")
+            end
+        end
+        
+        total_list.append(bbp_brd_list)
+        # Print(bbp_brd_list)
+        # Print("")
+    end
+end
+
+# Print(csv_content[0])
+for k in total_list
+    for bbp in k
+        #bbp.append(StrfTime("%a, %d %b %Y %H:%M:%S", GMTime()))
+        bbp.append(StrfTime("%d/%m/%Y", GMTime()))
+        csv_content.append(bbp)
+    end
+end
+
+# Print(csv_content)
+Functions.write_to_csv('bbp_poweroff_' + OSS + '.csv', csv_content)

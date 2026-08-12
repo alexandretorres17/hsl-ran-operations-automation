@@ -1,0 +1,170 @@
+f=Import('functions.hsl3')
+
+oss_area = f.Check_OSS()
+userSelect=""
+csv_path=""
+
+while (userSelect!="Exit")
+    csv_path,userSelect,rbSelect, filepath=f.Entry_form(csv_path)
+
+    if userSelect == "Confirm"
+        if len(csv_path) == 0
+            Print("\nERROR: No input file selected!\n")
+        else
+            SiteList,CsvData=f.Csv_to_array(csv_path)
+            startTime=StrfTime("%a, %d %b %Y %H:%M:%S", GMTime())
+            Print("Start time: "+startTime)
+            Print("Number of Sites: "+str(len(SiteList))+'\n')
+
+            site_count=0
+
+            if rbSelect==0
+                siteCells=[]
+                xlsData=[]
+                finalMML=""
+                for site in SiteList
+                    mmlScripts=""
+                    site_count=site_count+1
+                    state=ConnectNE(site)                            
+                    if state==1 
+                        version=GetNEVer().split(" ")[1]    
+                        Print('Connected to: '+site)
+                        Print('\tNE SW Version: '+version)                    
+                        ne_data = [data for data in CsvData if data[0] == site]
+                        counts=0
+                        for data in ne_data 
+                            if counts<1 
+                                mmlScripts=mmlScripts+'CFM CB:MODE=FORCED,NAME=\"OSP-NB_IoT\",AUTORBKSW=DISABLE; {'+data[0]+'}\n'                
+                                mmlScripts=mmlScripts+'ADD CNOPERATORTA:TRACKINGAREAID=3,CNOPERATORID=1,TAC=' + data[2] + ',NBIOTTAFLAG=BOOLEAN_TRUE; {' + data[0] + '}\n'
+                                mmlScripts=mmlScripts+'ADD MMECAPINFO:MMECAPCFGID=1,S1CFGTYPE=S1_CFG,S1ID=10,NBCIOTEPSOPTCAP=CP,NBLTESUPPORTCAP=SUPPORT; {' + data[0] + '}\n'
+                                mmlScripts=mmlScripts+'SET TIMESRC:AUTOSWITCH=OFF; {' + data[0] + '}\n'
+                                mmlScripts=mmlScripts+'SET FNSYNCTIME:FNSYNCSW=ON,DATE=1980&01&06,TIME=00&00&00; {'+data[0]+'}\n' 
+                                mmlScripts=mmlScripts+'MOD S1:S1ID=10,MMERELEASE=Release_R13; {' + data[0] + '}\n'  
+                                counts+=1
+                            end
+                        end
+
+                        p_cell = f.ParseMMLCMD("LST CELL:;", site)
+                        earfcn_list = GetColumnByName(p_cell, 0, "Downlink EARFCN")
+                        cell_id_list = GetColumnByName(p_cell, 0, "Local Cell ID")
+                        ilocellids = [i for i,v in enumerate(cell_id_list) if earfcn_list[i]=='6200']
+                        iotCount=len([i for i,v in enumerate(cell_id_list) if earfcn_list[i]=="NULL"])
+                        cellsnumber=len(ilocellids)
+
+                        rru_cnt = 0  
+                        licenseFlag = f.LicenseCheck(cellsnumber)                      
+                        bbpMML, bbpList, bbpCapacity = f.bbp_check(site, cellsnumber, iotCount)
+
+                        mmlScripts=mmlScripts+bbpMML
+
+                        pwrflag='FALSE'
+
+                        for cell_id in ilocellids                            
+                            cell_id_osp = str(int(cell_id_list[cell_id]) + 30)
+                            cell_name = GetColumnByName(p_cell,0,"Cell Name")[cell_id][0:8] + "C" + str(int(cell_id_list[cell_id]) - 119) + "A"
+                            pci_osp = GetColumnByName(p_cell,0,"Physical cell ID")[cell_id]
+                            celltxrx = GetColumnByName(p_cell, 0, "Cell transmission and reception mode")[cell_id]
+                            p_sectoreqm = f.ParseMMLCMD("LST EUCELLSECTOREQM:LocalCellId="+cell_id_list[cell_id]+";", site)
+                            if len(GetColumnByName(p_sectoreqm, 0, "Sector equipment ID")) != 0
+                                sectoreqm = GetColumnByName(p_sectoreqm, 0, "Sector equipment ID")[0]
+                                p_siteSectorEQM = f.ParseMMLCMD("LST SECTOREQM:SECTOREQMID="+sectoreqm+";", site)
+                                rruCab = GetColumnByName(p_siteSectorEQM,1,"Cabinet No.")[0]
+                                rruSRN = GetColumnByName(p_siteSectorEQM, 1, "Subrack No.")[0]
+                                rruSN = GetColumnByName(p_siteSectorEQM,1, "Slot No.")[0]
+                                p_cellpwr = f.ParseMMLCMD("LST PDSCHCFG:LocalCellId="+cell_id_list[cell_id]+";", site)
+                                cellpwr = GetColumnByName(p_cellpwr, 0, "Reference signal power(0.1dBm)")[0]
+                                mmlScripts=mmlScripts+'ADD CELL: LocalCellId=' + cell_id_osp + ', CellName="' + cell_name+'", NbCellFlag=TRUE, CoverageLevelType=COVERAGE_LEVEL_0-1&COVERAGE_LEVEL_1-1&COVERAGE_LEVEL_2-1, CellId=' + cell_id_osp +', PhyCellId=' + pci_osp + ', FddTddInd=CELL_FDD, EuCellStandbyMode=ACTIVE, CustomizedBandWidthCfgInd=NOT_CFG, UePowerMaxCfgInd=NOT_CFG, MultiRruCellFlag=BOOLEAN_FALSE, TxRxMode='+celltxrx+'; {' +site+ '}\n'
+                                mmlScripts=mmlScripts+'ADD CELLOP: LocalCellId='+ cell_id_osp +', TrackingAreaId=3, MMECfgNum=CELL_MME_CFG_NUM_0; {'+site+'}\n'
+                                mmlScripts=mmlScripts+'ADD PRB:LocalCellId=' + cell_id_osp + ',PRBID=' + str(int(cell_id_list[cell_id]) - 20) + ',DEPLOYMODE=GUARD_BAND,WORKMODE=UL_DL,ANCHORCARRIERFLAG=TRUE,FREQBAND=20,ULEARFCNCFGIND=CFG,LTEULRBINDEX=255,ULEARFCN=24153,ULFREQOFFSET=POS_1,LTEDLRBINDEX=255,DLEARFCN=6153,DLFREQOFFSET=NEG_1,NRCELLGBCFGIND=NOT_CFG,LTEBANDWIDTH=LTE_SYSTEM_BW_10M,LTEDLEARFCN=6200; {' + site + '}\n'
+                                #mmlScripts=mmlScripts+'ADD EUPRBSECTOREQM:LocalCellId=' + cell_id_osp + ',SectorEqmId=' + str(int(cell_id_list[cell_id]) - 113) + ',PrbId=' + str(int(cell_id_list[cell_id]) - 20) + '; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'ADD EUPRBSECTOREQM:LocalCellId=' + cell_id_osp + ',SectorEqmId=' + sectoreqm + ',PrbId=' + str(int(cell_id_list[cell_id]) - 20) + '; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD PDSCHCFG:LocalCellId=' + cell_id_osp + ',REFERENCESIGNALPWR=238,PB=0; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD CELLRACHCECFG:LocalCellId=' + cell_id_osp + ',COVERAGELEVEL=0,CONTENTIONRESOLUTIONTIMER=PP_8,MAXNUMPREAMBLEATTEMPT=REP_4; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD CELLRACHCECFG:LocalCellId=' + cell_id_osp + ',COVERAGELEVEL=1,CONTENTIONRESOLUTIONTIMER=PP_8,MAXNUMPREAMBLEATTEMPT=REP_4; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD CELLRACHCECFG:LocalCellId=' + cell_id_osp + ',COVERAGELEVEL=2,CONTENTIONRESOLUTIONTIMER=PP_32,MAXNUMPREAMBLEATTEMPT=REP_4; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD RACHCFG:LocalCellId=' + cell_id_osp + ',PREAMBINITRCVTARGETPWR=DBM_112,PRACHCONFIGINDEXCFGIND=NOT_CFG,NBRSRPFIRSTTHRESHOLD=-110,NBRSRPSECONDTHRESHOLD=-120; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD UETIMERCONST:LocalCellId=' + cell_id_osp + ',T300FORNB=MS10000_T300ForNb; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD PRBPDCCHCECONFIG:LocalCellId=' + cell_id_osp + ',PRBID=' + str(int(cell_id_list[cell_id]) - 20)+',COVERAGELEVEL=0,PDCCHPERIODFACTOR=G_2,PDCCHTRANSRPTCNTFACTOR=ONER_EIGHTR; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD PRBPDCCHCECONFIG:LocalCellId=' + cell_id_osp + ',PRBID=' + str(int(cell_id_list[cell_id]) - 20)+',COVERAGELEVEL=1,PDCCHPERIODFACTOR=G_2,PDCCHTRANSRPTCNTFACTOR=ONER_EIGHTR; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD PRBPDCCHCECONFIG:LocalCellId=' + cell_id_osp + ',PRBID=' + str(int(cell_id_list[cell_id]) - 20)+',COVERAGELEVEL=2,PDCCHPERIODFACTOR=G_2,PDCCHTRANSRPTCNTFACTOR=ONER; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD CELLRACHCECFG:LocalCellId=' + cell_id_osp + ',COVERAGELEVEL=1,MAXNUMPREAMBLEATTEMPT=REP_4; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD PRBDLSCHCEALGO:LocalCellId=' + cell_id_osp + ',PRBID=' + str(int(cell_id_list[cell_id]) - 20)+',COVERAGELEVEL=0,DLINITIALTRANSRPTCOUNT=REP_1; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD PRBDLSCHCEALGO:LocalCellId=' + cell_id_osp + ',PRBID=' + str(int(cell_id_list[cell_id]) - 20)+',COVERAGELEVEL=1,DLINITIALTRANSRPTCOUNT=REP_8; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD PRBDLSCHCEALGO:LocalCellId=' + cell_id_osp + ',PRBID=' + str(int(cell_id_list[cell_id]) - 20)+',COVERAGELEVEL=2,DLINITIALTRANSRPTCOUNT=REP_16; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD CELLSEL:LocalCellId=' + cell_id_osp + ',QRXLEVMIN=-70,QQUALMIN=-34; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD PCCHCFG:LocalCellId=' + cell_id_osp + ',PAGINGSTRATEGY=PAGING_STRATEGY_DIFFPRI; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD UETIMERCONST:LocalCellId=' + cell_id_osp + ',T300FORNB=MS25000_T300ForNb; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD CELLULPCCOMM:LocalCellId=' + cell_id_osp + ',PASSLOSSCOEFF=AL1,P0NOMINALPUSCH=-105; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD CELLALGOSWITCH:LocalCellId=' + cell_id_osp + ',RACHALGOSWITCH=BackOffSwitch-1,ULSCHEXTSWITCH=PreambleSchEnhSwitch-1,NBCELLALGOSWITCH=COVERAGE_EXTENSION_SWITCH-1&SI_OFFSET_ADAPTIVE_CFG_SWITCH-1; {' + site + '}\n'
+                                if int(cellpwr) > 149                            
+                                    mmlScripts=mmlScripts+'MOD PDSCHCFG: LocalCellId=' + cell_id_list[cell_id] + ', ReferenceSignalPwr=149; {' + site + '}\n'
+                                    pwrflag='TRUE'                               
+                                end
+                                mmlScripts=mmlScripts+'MOD CELLEMTCALGO: LocalCellId=' + cell_id_list[cell_id] + ', EmtcAlgoSwitch=EMTC_SWITCH-1&IDLE_EDRX_SWITCH-1, EMTCVOLTESUPPORTSWITCH=ON; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD CELLCECFG:LocalCellId=' + cell_id_list[cell_id] + ',COVERAGELEVEL=COVERAGE_LEVEL_1,RACHRSRPFSTTHD=-90; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD CELLSIMAP:LocalCellId=' + cell_id_list[cell_id] + ',MIBREPETITIONCTRLOPTSWITCH=ON; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD CELLCESCHCFG:LocalCellId=' + cell_id_list[cell_id] + ',COVERAGELEVEL=COVERAGE_LEVEL_1,SIB1REPNUM=SIB1_NUM_R4,MPDCCHMAXNUMREPPAGING=MPDCCH_MAX_NUM_R4; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD EMTCSIBCONFIG:LocalCellId=' + cell_id_list[cell_id] + ',EMTCSIBID=SIB2,EMTCSIBPERIOD=RF64; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD EMTCSIBCONFIG:LocalCellId=' + cell_id_list[cell_id] + ',EMTCSIBID=SIB3,EMTCSIBPERIOD=RF64; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD EMTCSIBCONFIG:LocalCellId=' + cell_id_list[cell_id] + ',EMTCSIBID=SIB4,EMTCSIBPERIOD=RF512; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD EMTCSIBCONFIG:LocalCellId=' + cell_id_list[cell_id] + ',EMTCSIBID=SIB5,EMTCSIBPERIOD=RF512; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD EMTCSIBCONFIG:LocalCellId=' + cell_id_list[cell_id] + ',EMTCSIBID=SIB14,EMTCSIBPERIOD=RF64; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD CERACHCFG:LocalCellId=' + cell_id_list[cell_id] + ',COVERAGELEVEL=COVERAGE_LEVEL_0,PREAMBLERATIO=50; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD CERACHCFG:LocalCellId=' + cell_id_list[cell_id] + ',COVERAGELEVEL=COVERAGE_LEVEL_1,PREAMBLERATIO=50,PREAMBLEREPETITIONNUM=PRACH_REPETITION_N2; {' + site + '}\n'
+                                mmlScripts=mmlScripts+'MOD RACHCFG:LocalCellId=' + cell_id_list[cell_id] + ',PRACHCONFIGINDEXCFGIND=CFG,PRACHCONFIGINDEX=35; {' + site + '}\n'
+                                #mmlScripts=mmlScripts+'ACT CELL:LocalCellId='+cell_id_osp+'{' + site + '}\n'
+                                cpriFlag, cpriMML = f.cpri_check(site, rru_cnt, cell_id_list[cell_id], rruCab, rruSRN)
+                                rru_cnt += 1   
+                                mmlScripts=mmlScripts+cpriMML
+                            else
+                                break
+                            end                                                 
+                        end
+                        xlsData.append([site, version, licenseFlag, bbpCapacity, cpriFlag, pwrflag, bbpList])
+                        siteCells.extend(f.getCellStatus(site))
+                        #if (licenseFlag == 'License OK' and bbpCapacity == 'TRUE' and cpriFlag != 'NOT OK (< 2.5Gbit/s)')
+                        finalMML=finalMML+mmlScripts
+                        #end
+                        Print('\n')                    
+                    else
+                        Print('/!\ NE is Disconnected: '+site)
+                        Print('\n')  
+                        xlsData.append([site,'NE is Disconnected','','','','',''])
+                        siteCells.append([site,'NE is Disconnected','','',''])             
+                    end                    
+                end
+                
+                fp = Open(GetOutputPath() + "//OSP_NB_IoT_Task.txt", "w+")
+                fp.write(finalMML)
+                fp.close()
+                outPath = f.CreateReportAll(xlsData, siteCells)
+                Print ('Report saved: '+outPath) 
+                userSelect="Exit"
+
+            elif rbSelect==1
+                siteCells=[]
+                for site in SiteList
+                    site_count=site_count+1
+                    state=ConnectNE(site)                            
+                    if state==1 
+                        version=GetNEVer().split(" ")[1]    
+                        Print('Connected to: '+site)
+                        Print('\tNE SW Version: '+version)  
+                        siteCells.extend(f.getCellStatus(site))
+                    else
+                        Print('/!\ NE is Disconnected: '+site)
+                        Print('\n')
+                        siteCells.append([site,'NE is Disconnected','','','']) 
+                    end
+                end
+                reportPath=f.CreateCellRport(siteCells)
+                Print ('Report saved: '+reportPath)
+                userSelect="Exit"  
+            end                      
+            endTime=StrfTime("%a, %d %b %Y %H:%M:%S", GMTime())
+            Print("\nEnd time: "+endTime)          
+        end
+    end
+end
+
+Print('Hasta compañero!! (ºº,)')
