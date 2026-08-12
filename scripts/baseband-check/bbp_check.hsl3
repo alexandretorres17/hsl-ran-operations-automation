@@ -1,4 +1,4 @@
-Functions = Import('Functions.hsl3') 
+Functions = Import('functions.hsl3') 
 
 OSS = ''
 OSS = Functions.Check_OSS()
